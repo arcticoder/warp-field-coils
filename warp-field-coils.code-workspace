@@ -5,8 +5,28 @@
 			"path": "."
 		},
 		{
+			"name": "elemental-transmutator",
+			"path": "../elemental-transmutator"
+		},
+		{
+			"name": "lqg-anec-framework",
+			"path": "../lqg-anec-framework"
+		},
+		{
 			"name": "negative-energy-generator",
 			"path": "../negative-energy-generator"
+		},
+		{
+			"name": "su2-3nj-closedform",
+			"path": "../su2-3nj-closedform"
+		},
+		{
+			"name": "su2-3nj-generating-functional",
+			"path": "../su2-3nj-generating-functional"
+		},
+		{
+			"name": "su2-node-matrix-elements",
+			"path": "../su2-node-matrix-elements"
 		},
 		{
 			"name": "unified-lqg",
@@ -31,14 +51,6 @@
 		{
 			"name": "warp-bubble-qft",
 			"path": "../warp-bubble-qft"
-		},
-		{
-			"name": "lqg-anec-framework",
-			"path": "../lqg-anec-framework"
-		},
-		{
-			"name": "elemental-transmutator",
-			"path": "../elemental-transmutator"
 		}
 	],
 	"settings": {
