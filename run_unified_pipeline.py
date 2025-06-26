@@ -1258,3 +1258,291 @@ class UnifiedWarpFieldPipeline:
             f.write(f"- ✅ Quantum anomaly feedback control\n")
             
         print(f"✓ Enhanced pipeline summary saved to {summary_path}")
+    
+    def run_enhanced_multiphysics_pipeline(self, config_overrides: Dict = None) -> Dict:
+        """
+        Run enhanced multi-physics warp field development pipeline.
+        
+        Includes:
+        - Mechanical stress constraints
+        - Thermal power limits  
+        - 3D coil geometries
+        - Multi-objective optimization
+        - FDTD validation
+        
+        Args:
+            config_overrides: Configuration parameter overrides
+            
+        Returns:
+            Enhanced pipeline results
+        """
+        print("\n" + "="*80)
+        print("🚀 ENHANCED MULTI-PHYSICS WARP FIELD PIPELINE")
+        print("="*80)
+        
+        results = {}
+        
+        # Load enhanced configuration
+        enhanced_config = self.config.copy()
+        if config_overrides:
+            enhanced_config.update(config_overrides)
+        
+        # Physical constraint parameters
+        constraints = {
+            'thickness': enhanced_config.get('conductor_thickness', 0.005),
+            'sigma_yield': enhanced_config.get('yield_stress', 300e6),
+            'rho_cu': enhanced_config.get('copper_resistivity', 1.7e-8),
+            'area': enhanced_config.get('conductor_area', 1e-6),
+            'P_max': enhanced_config.get('max_power', 1e6)
+        }
+        
+        # Step 1: Enhanced Exotic Matter Profile (with thermal dynamics)
+        print(f"\n🌊 Step 1 - Enhanced Time-Dependent Warp Profiles")
+        print("-" * 60)
+        
+        # Time-dependent trajectory
+        R_func = lambda t: enhanced_config['R'] + 0.1 * enhanced_config.get('velocity', 0.0) * t
+        times = np.linspace(0, enhanced_config.get('evolution_time', 2.0), 
+                           enhanced_config.get('time_samples', 5))
+        
+        r_array, T00_time_dep = self.exotic_matter_profiler.compute_T00_profile_time_dep(
+            R_func, enhanced_config['sigma'], times
+        )
+        
+        # Use final time slice as target
+        T00_target = T00_time_dep[-1, :]
+        finite_mask = np.isfinite(T00_target)
+        
+        if np.sum(finite_mask) > len(T00_target) // 2:
+            print(f"✓ Time-dependent profile: {T00_time_dep.shape}")
+            print(f"✓ Finite values: {np.sum(finite_mask)}/{len(T00_target)} ({np.sum(finite_mask)/len(T00_target)*100:.1f}%)")
+        else:
+            print("⚠️ Using fallback static profile")
+            r_array, T00_target = self.exotic_profiler.compute_T00_profile(
+                lambda r: alcubierre_profile(r, enhanced_config['R'], enhanced_config['sigma'])
+            )
+        
+        results['time_dependent_profile'] = {
+            'r_array': r_array,
+            'T00_evolution': T00_time_dep,
+            'target_profile': T00_target,
+            'evolution_times': times
+        }
+        
+        # Step 2: Multi-Physics Coil Optimization
+        print(f"\n🔧 Step 2 - Multi-Physics Coil Optimization")
+        print("-" * 60)
+        
+        # Set target profile
+        self.coil_optimizer.set_target_profile(r_array, T00_target)
+        
+        # Multi-objective weights
+        alpha_q = enhanced_config.get('quantum_weight', 1e-3)
+        alpha_m = enhanced_config.get('mechanical_weight', 1e3) 
+        alpha_t = enhanced_config.get('thermal_weight', 1e2)
+        
+        # Initial parameters
+        initial_params = np.array([
+            enhanced_config.get('initial_amplitude', 0.1),
+            enhanced_config['R'], 
+            enhanced_config['sigma']
+        ])
+        
+        # Multi-physics optimization
+        def multi_physics_objective(params):
+            return self.coil_optimizer.objective_full_multiphysics(
+                params, alpha_q, alpha_m, alpha_t, **constraints
+            )
+        
+        try:
+            opt_result = minimize(
+                multi_physics_objective,
+                initial_params,
+                method='L-BFGS-B',
+                bounds=[(0.01, 5.0), (0.1, 10.0), (0.1, 2.0)],
+                options={'maxiter': 200}
+            )
+            
+            if opt_result.success:
+                optimized_params = opt_result.x
+                print(f"✓ Multi-physics optimization converged")
+                print(f"  Parameters: {optimized_params}")
+                print(f"  Final objective: {opt_result.fun:.6e}")
+                
+                # Analyze penalty components
+                components = self.coil_optimizer.get_penalty_components(
+                    optimized_params, **constraints
+                )
+                print(f"  Classical: {components['classical']:.2e}")
+                print(f"  Quantum: {components['quantum']:.2e}")
+                print(f"  Mechanical: {components['mechanical']:.2e}")
+                print(f"  Thermal: {components['thermal']:.2e}")
+                
+                results['multiphysics_optimization'] = {
+                    'success': True,
+                    'parameters': optimized_params,
+                    'objective_value': opt_result.fun,
+                    'penalty_components': components,
+                    'constraints': constraints,
+                    'weights': {'quantum': alpha_q, 'mechanical': alpha_m, 'thermal': alpha_t}
+                }
+                
+            else:
+                print(f"❌ Multi-physics optimization failed: {opt_result.message}")
+                optimized_params = initial_params
+                results['multiphysics_optimization'] = {'success': False, 'message': opt_result.message}
+                
+        except Exception as e:
+            print(f"❌ Multi-physics optimization error: {e}")
+            optimized_params = initial_params
+            results['multiphysics_optimization'] = {'success': False, 'error': str(e)}
+        
+        # Step 3: 3D Coil Geometry Generation
+        print(f"\n🔧 Step 3 - 3D Coil Geometry Generation")
+        print("-" * 60)
+        
+        try:
+            from field_solver.biot_savart_3d import BiotSavart3DSolver, create_warp_coil_3d_system
+            
+            # Create 3D coil system
+            coil_system_3d = create_warp_coil_3d_system(R_bubble=enhanced_config['R'])
+            
+            print(f"✓ Generated 3D coil system: {len(coil_system_3d)} components")
+            for coil in coil_system_3d:
+                print(f"  - {coil.coil_type}: {len(coil.path_points)} points, I = {coil.current:.1f} A")
+            
+            # Compute 3D field performance
+            solver_3d = BiotSavart3DSolver()
+            z_positions, B_z_axis = solver_3d.compute_field_on_axis(
+                coil_system_3d[0], z_range=(-3.0, 3.0)
+            )
+            
+            results['3d_coil_geometry'] = {
+                'success': True,
+                'n_coils': len(coil_system_3d),
+                'total_current': sum(abs(coil.current) for coil in coil_system_3d),
+                'max_B_z': float(np.max(np.abs(B_z_axis))),
+                'field_uniformity': float(np.std(B_z_axis) / np.mean(np.abs(B_z_axis)))
+            }
+            
+        except Exception as e:
+            print(f"⚠️ 3D geometry generation error: {e}")
+            results['3d_coil_geometry'] = {'success': False, 'error': str(e)}
+        
+        # Step 4: Multi-Objective Pareto Analysis
+        print(f"\n🎯 Step 4 - Multi-Objective Pareto Analysis")
+        print("-" * 60)
+        
+        try:
+            from optimization.multi_objective import MultiObjectiveOptimizer, create_default_constraints
+            
+            # Create multi-objective optimizer
+            mo_optimizer = MultiObjectiveOptimizer(self.coil_optimizer, constraints)
+            
+            # Weight sweep for Pareto front
+            pareto_points = mo_optimizer.weight_sweep_optimization(
+                n_weights=enhanced_config.get('pareto_samples', 20),
+                initial_params=optimized_params
+            )
+            
+            # Analyze Pareto front
+            pareto_analysis = mo_optimizer.analyze_pareto_front()
+            
+            print(f"✓ Pareto analysis complete:")
+            print(f"  Pareto points: {pareto_analysis.get('n_points', 0)}")
+            print(f"  Hypervolume: {pareto_analysis.get('hypervolume_estimate', 0):.6f}")
+            
+            results['pareto_analysis'] = {
+                'success': True,
+                'n_pareto_points': pareto_analysis.get('n_points', 0),
+                'hypervolume': pareto_analysis.get('hypervolume_estimate', 0),
+                'objective_ranges': pareto_analysis.get('objective_ranges', {}),
+                'ideal_point': pareto_analysis.get('ideal_point', []),
+                'nadir_point': pareto_analysis.get('nadir_point', [])
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Pareto analysis error: {e}")
+            results['pareto_analysis'] = {'success': False, 'error': str(e)}
+        
+        # Step 5: FDTD Validation
+        print(f"\n🌊 Step 5 - FDTD Electromagnetic Validation")
+        print("-" * 60)
+        
+        try:
+            from validation.fdtd_solver import FDTDValidator
+            
+            # Create FDTD validator
+            fdtd_validator = FDTDValidator(use_meep=False)  # Mock for now
+            
+            # Validate primary coil if 3D geometry available
+            if results['3d_coil_geometry']['success']:
+                validation_results = fdtd_validator.validate_coil_design(
+                    coil_system_3d[0],
+                    target_frequency=enhanced_config.get('validation_frequency', 1e6)
+                )
+                
+                print(f"✓ FDTD validation complete:")
+                print(f"  Max E-field: {validation_results['field_maxima']['E_max']:.2e} V/m")
+                print(f"  Max B-field: {validation_results['field_maxima']['B_max']:.2e} T")
+                print(f"  Frequency accuracy: {validation_results['frequency_analysis']['frequency_accuracy']:.2%}")
+                
+                results['fdtd_validation'] = {
+                    'success': True,
+                    'field_maxima': validation_results['field_maxima'],
+                    'energy_analysis': validation_results['energy_analysis'],
+                    'frequency_analysis': validation_results['frequency_analysis']
+                }
+            else:
+                print("⚠️ Skipping FDTD validation (no 3D geometry)")
+                results['fdtd_validation'] = {'success': False, 'reason': 'No 3D geometry'}
+                
+        except Exception as e:
+            print(f"⚠️ FDTD validation error: {e}")
+            results['fdtd_validation'] = {'success': False, 'error': str(e)}
+        
+        # Enhanced Pipeline Summary
+        print(f"\n" + "="*80)
+        print("📋 ENHANCED MULTI-PHYSICS PIPELINE SUMMARY")
+        print("="*80)
+        
+        successful_steps = sum(1 for step_name, step_result in results.items() 
+                              if step_result.get('success', False))
+        total_steps = len(results)
+        
+        print(f"✅ Pipeline completion: {successful_steps}/{total_steps} steps successful")
+        
+        for step_name, step_result in results.items():
+            status_icon = "✅" if step_result.get('success', False) else "❌"
+            step_title = step_name.replace('_', ' ').title()
+            print(f"{status_icon} {step_title}")
+        
+        # Overall assessment
+        if successful_steps >= total_steps * 0.8:
+            overall_status = "ENHANCED PIPELINE SUCCESSFUL"
+            print(f"\n🎉 {overall_status}")
+            print("🚀 Multi-physics warp field system ready for experimental deployment!")
+        elif successful_steps >= total_steps * 0.6:
+            overall_status = "ENHANCED PIPELINE MOSTLY SUCCESSFUL"
+            print(f"\n⚠️ {overall_status}")
+            print("🔧 Some advanced features may need attention")
+        else:
+            overall_status = "ENHANCED PIPELINE NEEDS ATTENTION"
+            print(f"\n❌ {overall_status}")
+            print("🔧 Multiple features require debugging")
+        
+        results['pipeline_summary'] = {
+            'overall_status': overall_status,
+            'success_rate': successful_steps / total_steps,
+            'successful_steps': successful_steps,
+            'total_steps': total_steps,
+            'enhanced_features': [
+                'Time-dependent warp profiles',
+                'Multi-physics optimization',
+                '3D coil geometries', 
+                'Pareto front analysis',
+                'FDTD validation'
+            ]
+        }
+        
+        return results

@@ -489,6 +489,146 @@ class AdvancedCoilOptimizer:
         J_quantum = alpha * self.quantum_penalty(params, ansatz_type)
         
         return J_classical + J_quantum
+    
+    def mechanical_penalty(self, params: jnp.ndarray, thickness: float = 0.005, 
+                          sigma_yield: float = 300e6) -> float:
+        """
+        Compute mechanical stress penalty for coil windings.
+        
+        Hoop stress: σ_θ(r,I) = μ₀I²/(2πrt)
+        
+        Args:
+            params: Coil parameter vector
+            thickness: Conductor thickness (m)
+            sigma_yield: Yield stress limit (Pa)
+            
+        Returns:
+            Mechanical penalty J_mech = Σ max(0, σ_θ - σ_yield)²
+        """
+        # Extract current amplitudes from parameter vector
+        n_gaussians = len(params) // 3
+        A = params.reshape(n_gaussians, 3)[:, 0]  # Amplitude for each Gaussian shell
+        r = params.reshape(n_gaussians, 3)[:, 1]  # Center radius
+        
+        # Hoop stress calculation: σ_θ = μ₀I²/(2πrt)
+        mu0 = 4 * jnp.pi * 1e-7  # Permeability of free space
+        I_squared = A**2  # Current squared (proportional to amplitude squared)
+        
+        # Avoid division by zero
+        r_safe = jnp.maximum(r, 1e-6)
+        thickness_safe = jnp.maximum(thickness, 1e-6)
+        
+        sigma_theta = mu0 * I_squared / (2 * jnp.pi * r_safe * thickness_safe)
+        
+        # Penalty for exceeding yield stress
+        stress_violation = jnp.maximum(0.0, sigma_theta - sigma_yield)
+        penalty = jnp.sum(jnp.square(stress_violation))
+        
+        return penalty
+    
+    def thermal_penalty(self, params: jnp.ndarray, rho_cu: float = 1.7e-8,
+                       area: float = 1e-6, P_max: float = 1e6) -> float:
+        """
+        Compute thermal penalty for ohmic heating.
+        
+        Power loss: P_loss(r,I) = I²R ≈ I²ρ/A
+        
+        Args:
+            params: Coil parameter vector
+            rho_cu: Copper resistivity (Ω·m)
+            area: Conductor cross-sectional area (m²)
+            P_max: Maximum allowable power (W)
+            
+        Returns:
+            Thermal penalty J_therm = Σ (P_loss/P_max)²
+        """
+        # Extract current amplitudes
+        n_gaussians = len(params) // 3
+        A = params.reshape(n_gaussians, 3)[:, 0]  # Current amplitude
+        
+        # Ohmic power loss per coil section
+        I_squared = A**2
+        area_safe = jnp.maximum(area, 1e-12)
+        
+        P_loss = I_squared * (rho_cu / area_safe)
+        
+        # Normalized power penalty
+        P_normalized = P_loss / P_max
+        penalty = jnp.sum(jnp.square(P_normalized))
+        
+        return penalty
+    
+    def objective_full_multiphysics(self, params: jnp.ndarray, 
+                                   alpha_q: float = 1e-3,
+                                   alpha_m: float = 1e3, 
+                                   alpha_t: float = 1e2,
+                                   **constraints) -> float:
+        """
+        Full multi-physics objective function.
+        
+        J_total = J_classical + α_q·J_quantum + α_m·J_mech + α_t·J_thermal
+        
+        Args:
+            params: Optimization parameters
+            alpha_q: Quantum penalty weight
+            alpha_m: Mechanical penalty weight  
+            alpha_t: Thermal penalty weight
+            **constraints: Physical constraint parameters
+            
+        Returns:
+            Total multi-physics objective value
+        """
+        # Classical electromagnetic objective
+        J_classical = self.objective_function(params)
+        
+        # Quantum geometry penalty
+        J_quantum = self.quantum_penalty(params)
+        
+        # Mechanical stress penalty
+        J_mechanical = self.mechanical_penalty(
+            params,
+            thickness=constraints.get('thickness', 0.005),
+            sigma_yield=constraints.get('sigma_yield', 300e6)
+        )
+        
+        # Thermal penalty
+        J_thermal = self.thermal_penalty(
+            params,
+            rho_cu=constraints.get('rho_cu', 1.7e-8),
+            area=constraints.get('area', 1e-6),
+            P_max=constraints.get('P_max', 1e6)
+        )
+        
+        # Combined multi-physics objective
+        J_total = (J_classical + 
+                  alpha_q * J_quantum + 
+                  alpha_m * J_mechanical + 
+                  alpha_t * J_thermal)
+        
+        return J_total
+    
+    def get_penalty_components(self, params: jnp.ndarray, **constraints) -> Dict[str, float]:
+        """
+        Get individual penalty components for analysis.
+        
+        Returns:
+            Dictionary with individual penalty values
+        """
+        return {
+            'classical': float(self.objective_function(params)),
+            'quantum': float(self.quantum_penalty(params)),
+            'mechanical': float(self.mechanical_penalty(
+                params,
+                thickness=constraints.get('thickness', 0.005),
+                sigma_yield=constraints.get('sigma_yield', 300e6)
+            )),
+            'thermal': float(self.thermal_penalty(
+                params,
+                rho_cu=constraints.get('rho_cu', 1.7e-8),
+                area=constraints.get('area', 1e-6),
+                P_max=constraints.get('P_max', 1e6)
+            ))
+        }
 
 if __name__ == "__main__":
     # Example usage
