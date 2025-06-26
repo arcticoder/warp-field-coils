@@ -1,0 +1,64 @@
+{
+	"folders": [
+		{
+			"name": "warp-field-coils (main)",
+			"path": "."
+		},
+		{
+			"name": "negative-energy-generator",
+			"path": "../negative-energy-generator"
+		},
+		{
+			"name": "unified-lqg",
+			"path": "../unified-lqg"
+		},
+		{
+			"name": "unified-lqg-qft",
+			"path": "../unified-lqg-qft"
+		},
+		{
+			"name": "warp-bubble-einstein-equations",
+			"path": "../warp-bubble-einstein-equations"
+		},
+		{
+			"name": "warp-bubble-exotic-matter-density",
+			"path": "../warp-bubble-exotic-matter-density"
+		},
+		{
+			"name": "warp-bubble-optimizer",
+			"path": "../warp-bubble-optimizer"
+		},
+		{
+			"name": "warp-bubble-qft",
+			"path": "../warp-bubble-qft"
+		},
+		{
+			"name": "lqg-anec-framework",
+			"path": "../lqg-anec-framework"
+		},
+		{
+			"name": "elemental-transmutator",
+			"path": "../elemental-transmutator"
+		}
+	],
+	"settings": {
+		"python.defaultInterpreterPath": "C:\\Program Files\\Python313\\python.exe",
+		"files.exclude": {
+			"**/.git": true,
+			"**/node_modules": true,
+			"**/__pycache__": true,
+			"**/.pytest_cache": true,
+			"**/venv": true,
+			"**/.venv": true
+		},
+		"powershell.cwd": "warp-field-coils (main)"
+	},
+	"extensions": {
+		"recommendations": [
+			"ms-python.python",
+			"ms-vscode.cpptools",
+			"james-yu.latex-workshop",
+			"ms-toolsai.jupyter"
+		]
+	}
+}
