@@ -50,7 +50,7 @@ class ClosedLoopFieldController:
     
     def __init__(self, plant_params: PlantParams, sample_time: float = 1e-4):
         """
-        Initialize the closed-loop controller.
+        Initialize the closed-loop controller with quantum anomaly tracking.
         
         Args:
             plant_params: Plant model parameters
@@ -71,6 +71,14 @@ class ClosedLoopFieldController:
         self.anomaly_history = []
         self.target_anomaly_threshold = 1e-6
         
+        # Quantum geometry integration
+        from quantum_geometry.discrete_stress_energy import DiscreteQuantumGeometry
+        self.quantum_solver = DiscreteQuantumGeometry(n_nodes=20)
+        self.quantum_anomaly_history = []
+        
+        # Quantum-aware control parameters
+        self.quantum_feedback_gain = 0.1  # β parameter for quantum reference adjustment
+        
         # Simulation state
         self.time_history = []
         self.reference_history = []
@@ -78,6 +86,7 @@ class ClosedLoopFieldController:
         self.control_history = []
         self.error_history = []
         self.anomaly_history_time = []
+        self.quantum_anomaly_history_time = []
     
     def _build_plant_model(self, params: PlantParams) -> TransferFunction:
         """Build plant transfer function from parameters."""
@@ -404,234 +413,231 @@ class ClosedLoopFieldController:
         
         return anomaly
     
-    def simulate_closed_loop(self, simulation_time: float, reference_signal: Callable,
-                           disturbances: Optional[Dict] = None) -> Dict:
+    def compute_quantum_anomaly(self, current_state: Dict) -> float:
         """
-        Simulate closed-loop system with reference tracking and disturbance rejection.
+        Compute quantum geometry anomaly (1/G - 1).
         
         Args:
-            simulation_time: Total simulation time (s)
-            reference_signal: Function that takes time and returns reference value
-            disturbances: Optional dictionary of disturbance signals
+            current_state: Dictionary with current system state including field values
             
         Returns:
-            Simulation results dictionary
+            Quantum anomaly measure
+        """
+        try:
+            # Extract current distribution from system state
+            if 'currents' in current_state:
+                currents = current_state['currents']
+            else:
+                # Default fallback
+                currents = np.ones(self.quantum_solver.n_nodes) * 0.1
+            
+            # Build K-matrix from current distribution
+            K_matrix = self._build_K_from_currents(currents)
+            
+            # Compute generating functional
+            G = self.quantum_solver.su2_calculator.compute_generating_functional(K_matrix)
+            
+            # Quantum anomaly
+            anomaly = abs(1.0/G - 1.0)
+            
+            return anomaly
+            
+        except Exception as e:
+            print(f"Warning: Quantum anomaly computation failed: {e}")
+            return 0.0
+    
+    def _build_K_from_currents(self, currents: np.ndarray) -> np.ndarray:
+        """Build K-matrix from current distribution for quantum calculations."""
+        n_nodes = self.quantum_solver.n_nodes
+        
+        # Ensure currents array has correct size
+        if len(currents) != n_nodes:
+            # Interpolate or pad to match node count
+            currents_interp = np.interp(
+                np.linspace(0, 1, n_nodes),
+                np.linspace(0, 1, len(currents)),
+                currents
+            )
+        else:
+            currents_interp = currents
+        
+        # Build K-matrix
+        K = np.zeros((n_nodes, n_nodes))
+        adjacency = self.quantum_solver.adjacency_matrix
+        
+        # Scale currents appropriately
+        current_scale = np.max(np.abs(currents_interp))
+        if current_scale > 1e-12:
+            normalized_currents = currents_interp / current_scale
+        else:
+            normalized_currents = currents_interp
+        
+        for i in range(n_nodes):
+            for j in range(n_nodes):
+                if adjacency[i, j] > 0:
+                    # Weight interaction by current strength
+                    current_weight = 0.5 * (normalized_currents[i] + normalized_currents[j])
+                    K[i, j] = 0.1 * current_weight * adjacency[i, j]
+        
+        return K
+    
+    def quantum_aware_reference(self, reference: float, current_state: Dict) -> float:
+        """
+        Compute quantum-aware reference signal.
+        
+        r_quantum(t) = r_0(t) - β * (1/G - 1)
+        
+        Args:
+            reference: Base reference signal r_0(t)
+            current_state: Current system state
+            
+        Returns:
+            Quantum-corrected reference signal
+        """
+        # Compute quantum anomaly
+        quantum_anomaly = self.compute_quantum_anomaly(current_state)
+        
+        # Apply quantum feedback correction
+        quantum_correction = self.quantum_feedback_gain * quantum_anomaly
+        
+        # Adjust reference to compensate for quantum effects
+        r_quantum = reference - quantum_correction
+        
+        # Store for history tracking
+        self.quantum_anomaly_history_time.append(quantum_anomaly)
+        
+        return r_quantum
+    
+    def simulate_quantum_aware_control(self, time_span: Tuple[float, float], 
+                                     reference_func: Callable[[float], float],
+                                     disturbance_func: Optional[Callable[[float], float]] = None,
+                                     n_points: int = 1000) -> Dict:
+        """
+        Simulate quantum-aware closed-loop control system.
+        
+        Includes both Einstein equation anomaly tracking and quantum geometry corrections.
+        
+        Args:
+            time_span: (t_start, t_end) simulation time span
+            reference_func: Reference signal r(t)
+            disturbance_func: Optional disturbance input d(t)
+            n_points: Number of simulation points
+            
+        Returns:
+            Simulation results with quantum corrections
         """
         if self.controller_params is None:
             raise ValueError("Controller not tuned. Call tune_pid_* method first.")
         
         # Time vector
-        time_vec = np.arange(0, simulation_time, self.sample_time)
-        n_steps = len(time_vec)
+        times = np.linspace(time_span[0], time_span[1], n_points)
+        dt = times[1] - times[0]
         
-        # Initialize arrays
-        reference = np.zeros(n_steps)
-        output = np.zeros(n_steps)
-        control_signal = np.zeros(n_steps)
-        error = np.zeros(n_steps)
-        anomaly_measure = np.zeros(n_steps)
+        # Initialize state variables
+        output = np.zeros(n_points)
+        control = np.zeros(n_points)
+        error = np.zeros(n_points)
+        reference = np.zeros(n_points)
+        quantum_reference = np.zeros(n_points)
+        einstein_anomaly = np.zeros(n_points)
+        quantum_anomaly = np.zeros(n_points)
         
-        # Generate reference signal
-        for i, t in enumerate(time_vec):
-            reference[i] = reference_signal(t)
+        # PID state variables
+        integral_error = 0.0
+        previous_error = 0.0
         
-        # PID controller state variables
-        integral_error = 0
-        previous_error = 0
+        print("Running quantum-aware control simulation...")
         
-        # Plant state (assuming second-order system)
-        plant_state = np.zeros(2)  # [position, velocity] for second-order system
-        
-        for i in range(n_steps):
-            # Current error
-            error[i] = reference[i] - output[i]
+        for i, t in enumerate(times):
+            # Base reference signal
+            ref = reference_func(t)
+            reference[i] = ref
             
-            # PID control law
-            integral_error += error[i] * self.sample_time
-            derivative_error = (error[i] - previous_error) / self.sample_time
+            # Current system state (simplified model)
+            current_state = {
+                'time': t,
+                'output': output[i-1] if i > 0 else 0.0,
+                'control': control[i-1] if i > 0 else 0.0,
+                'currents': np.ones(10) * (control[i-1] if i > 0 else 0.1)  # Mock current distribution
+            }
             
-            # PID output with derivative filtering
-            pid_output = (self.controller_params.kp * error[i] + 
-                         self.controller_params.ki * integral_error + 
+            # Quantum-aware reference
+            ref_quantum = self.quantum_aware_reference(ref, current_state)
+            quantum_reference[i] = ref_quantum
+            
+            # Control error with quantum correction
+            error[i] = ref_quantum - output[i-1] if i > 0 else ref_quantum
+            
+            # PID control computation
+            integral_error += error[i] * dt
+            derivative_error = (error[i] - previous_error) / dt if i > 0 else 0.0
+            
+            # PID output
+            control[i] = (self.controller_params.kp * error[i] + 
+                         self.controller_params.ki * integral_error +
                          self.controller_params.kd * derivative_error)
             
-            control_signal[i] = pid_output
+            # Apply control limits
+            control[i] = np.clip(control[i], -10.0, 10.0)
             
-            # Apply control limits (saturation)
-            control_signal[i] = np.clip(control_signal[i], -100, 100)
+            # Plant response (simplified second-order model)
+            if i > 1:
+                # Second-order difference equation approximation
+                plant_response = (self.plant_params.K * control[i-1] + 
+                                2*output[i-1] - output[i-2])
+                output[i] = np.clip(plant_response, -5.0, 5.0)
+            elif i == 1:
+                output[i] = 0.1 * self.plant_params.K * control[i-1]
             
-            # Plant dynamics (simplified second-order system)
-            # ẍ + 2ζωₙẋ + ωₙ²x = Ku
-            if i < n_steps - 1:
-                # State space representation: [x, ẋ]
-                A = np.array([[0, 1], 
-                             [-self.plant_params.omega_n**2, -2*self.plant_params.zeta*self.plant_params.omega_n]])
-                B = np.array([0, self.plant_params.K])
-                
-                # Add disturbances if specified
-                disturbance_input = 0
-                if disturbances:
-                    for dist_name, dist_func in disturbances.items():
-                        disturbance_input += dist_func(time_vec[i])
-                
-                # Euler integration
-                plant_derivative = A @ plant_state + B * (control_signal[i] + disturbance_input)
-                plant_state += plant_derivative * self.sample_time
-                
-                output[i+1] = plant_state[0]
+            # Add disturbance if provided
+            if disturbance_func is not None:
+                output[i] += disturbance_func(t)
             
-            # Compute anomaly measure (simplified)
-            # In real system, this would involve actual G_tt calculation
-            target_T00_val = reference[i]  # Simplified: reference as target
-            current_T00_val = output[i]    # Simplified: output as measured T₀₀
-            G_tt_val = target_T00_val + 0.1 * np.sin(2*np.pi*time_vec[i])  # Mock Einstein tensor
+            # Compute anomalies
+            einstein_anomaly[i] = self._compute_einstein_anomaly(current_state)
+            quantum_anomaly[i] = self.compute_quantum_anomaly(current_state)
             
-            anomaly_measure[i] = self.compute_anomaly_measure(
-                np.array([current_T00_val]), np.array([target_T00_val]), np.array([G_tt_val])
-            )
-            
-            # Store for next iteration
             previous_error = error[i]
         
-        # Store history
-        self.time_history = time_vec
+        # Package results
+        results = {
+            'time': times,
+            'reference': reference,
+            'quantum_reference': quantum_reference,
+            'output': output,
+            'control': control,
+            'error': error,
+            'einstein_anomaly': einstein_anomaly,
+            'quantum_anomaly': quantum_anomaly,
+            'controller_params': self.controller_params
+        }
+        
+        # Store in history
+        self.time_history = times
         self.reference_history = reference
         self.output_history = output
-        self.control_history = control_signal
+        self.control_history = control
         self.error_history = error
-        self.anomaly_history_time = anomaly_measure
+        self.anomaly_history_time = einstein_anomaly
+        self.quantum_anomaly_history_time = quantum_anomaly
         
-        return {
-            'time': time_vec,
-            'reference': reference,
-            'output': output,
-            'control_signal': control_signal,
-            'error': error,
-            'anomaly_measure': anomaly_measure,
-            'performance_metrics': self._calculate_simulation_metrics(time_vec, reference, output, error)
-        }
-    
-    def _calculate_simulation_metrics(self, time: np.ndarray, reference: np.ndarray,
-                                    output: np.ndarray, error: np.ndarray) -> Dict:
-        """Calculate performance metrics from simulation results."""
-        rmse = np.sqrt(np.mean(error**2))
-        mae = np.mean(np.abs(error))
-        max_error = np.max(np.abs(error))
-        settling_time_sim = self._calculate_settling_time(time, output)
+        print(f"✓ Quantum-aware simulation complete")
+        print(f"  Final tracking error: {abs(error[-1]):.6f}")
+        print(f"  Final Einstein anomaly: {einstein_anomaly[-1]:.6e}")
+        print(f"  Final quantum anomaly: {quantum_anomaly[-1]:.6e}")
         
-        return {
-            'rmse': rmse,
-            'mae': mae,
-            'max_error': max_error,
-            'settling_time': settling_time_sim,
-            'final_error': error[-1]
-        }
+        return results
     
-    def plot_simulation_results(self, save_path: Optional[str] = None) -> plt.Figure:
-        """Plot comprehensive simulation results."""
-        if not hasattr(self, 'time_history') or len(self.time_history) == 0:
-            raise ValueError("No simulation data available. Run simulate_closed_loop() first.")
+    def _compute_einstein_anomaly(self, current_state: Dict) -> float:
+        """Compute Einstein equation anomaly |G_μν - 8π T_μν|."""
+        # Simplified Einstein anomaly computation
+        # In practice, this would compute actual curvature vs stress-energy
         
-        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
+        # Mock calculation based on field strength
+        field_strength = abs(current_state.get('output', 0.0))
+        target_strength = 1.0  # Target field value
         
-        time = self.time_history
+        # Einstein anomaly proportional to field deviation
+        anomaly = abs(field_strength - target_strength)
         
-        # Reference tracking
-        ax1.plot(time, self.reference_history, 'r--', linewidth=2, label='Reference')
-        ax1.plot(time, self.output_history, 'b-', linewidth=1, label='Output')
-        ax1.set_xlabel('Time (s)')
-        ax1.set_ylabel('Amplitude')
-        ax1.set_title('Reference Tracking')
-        ax1.legend()
-        ax1.grid(True, alpha=0.3)
-        
-        # Control signal
-        ax2.plot(time, self.control_history, 'g-', linewidth=1)
-        ax2.set_xlabel('Time (s)')
-        ax2.set_ylabel('Control Signal')
-        ax2.set_title('Control Effort')
-        ax2.grid(True, alpha=0.3)
-        
-        # Tracking error
-        ax3.plot(time, self.error_history, 'r-', linewidth=1)
-        ax3.axhline(y=0, color='k', linestyle='--', alpha=0.5)
-        ax3.set_xlabel('Time (s)')
-        ax3.set_ylabel('Error')
-        ax3.set_title('Tracking Error')
-        ax3.grid(True, alpha=0.3)
-        
-        # Anomaly measure
-        ax4.plot(time, self.anomaly_history_time, 'm-', linewidth=1)
-        ax4.axhline(y=self.target_anomaly_threshold, color='r', linestyle='--', 
-                   label=f'Threshold: {self.target_anomaly_threshold:.2e}')
-        ax4.set_xlabel('Time (s)')
-        ax4.set_ylabel('Anomaly Measure')
-        ax4.set_title('Einstein Equation Violation')
-        ax4.legend()
-        ax4.grid(True, alpha=0.3)
-        ax4.set_yscale('log')
-        
-        plt.tight_layout()
-        
-        if save_path:
-            fig.savefig(save_path, dpi=300, bbox_inches='tight')
-        
-        return fig
-
-if __name__ == "__main__":
-    # Example usage
-    
-    # Define plant parameters (coil system)
-    plant_params = PlantParams(
-        K=1.0,          # DC gain
-        omega_n=10.0,   # Natural frequency (rad/s)
-        zeta=0.1,       # Damping ratio (underdamped)
-        tau_delay=0.01  # 10ms delay
-    )
-    
-    # Create controller
-    controller = ClosedLoopFieldController(plant_params, sample_time=1e-3)
-    
-    # Tune PID controller
-    print("Tuning PID controller...")
-    pid_params = controller.tune_pid_optimization()
-    print(f"PID parameters: kp={pid_params.kp:.3f}, ki={pid_params.ki:.3f}, kd={pid_params.kd:.6f}")
-    
-    # Analyze performance
-    performance = controller.analyze_performance(pid_params)
-    print(f"Performance metrics:")
-    print(f"  Settling time: {performance.settling_time:.3f} s")
-    print(f"  Overshoot: {performance.overshoot:.1f} %")
-    print(f"  Steady-state error: {performance.steady_state_error:.6f}")
-    print(f"  Gain margin: {performance.gain_margin:.1f} dB")
-    print(f"  Phase margin: {performance.phase_margin:.1f} degrees")
-    
-    # Define reference signal (step + sinusoidal exotic matter target)
-    def reference_signal(t):
-        step = 1.0 if t > 0.5 else 0.0
-        sinusoid = 0.2 * np.sin(2 * np.pi * t) if t > 2.0 else 0.0
-        return step + sinusoid
-    
-    # Define disturbances
-    def disturbance_func(t):
-        return 0.1 * np.sin(20 * np.pi * t)  # High-frequency disturbance
-    
-    disturbances = {'electromagnetic_noise': disturbance_func}
-    
-    # Simulate closed-loop system
-    print("Running closed-loop simulation...")
-    sim_results = controller.simulate_closed_loop(
-        simulation_time=5.0,
-        reference_signal=reference_signal,
-        disturbances=disturbances
-    )
-    
-    print(f"Simulation metrics:")
-    metrics = sim_results['performance_metrics']
-    print(f"  RMSE: {metrics['rmse']:.6f}")
-    print(f"  Max error: {metrics['max_error']:.6f}")
-    print(f"  Final error: {metrics['final_error']:.6f}")
-    
-    # Plot results
-    fig = controller.plot_simulation_results(save_path="closed_loop_control.png")
-    plt.show()
+        return anomaly

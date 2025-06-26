@@ -31,30 +31,27 @@ class AdvancedCoilOptimizer:
     Implements Step 2 of the roadmap.
     """
     
-    def __init__(self, r_min: float = 0.1, r_max: float = 10.0, n_points: int = 500):
-        """
-        Initialize the coil optimizer.
-        
-        Args:
-            r_min: Minimum radial coordinate
-            r_max: Maximum radial coordinate
-            n_points: Number of grid points
-        """
+    def __init__(self, r_min: float = 0.1, r_max: float = 5.0, n_points: int = 100):
+        """Initialize the advanced coil optimizer with quantum geometry integration."""
         self.r_min = r_min
         self.r_max = r_max
         self.n_points = n_points
-        self.dr = (r_max - r_min) / (n_points - 1)
         self.rs = jnp.linspace(r_min, r_max, n_points)
         
         # Physical constants
-        self.c = 299792458.0  # m/s
-        self.G = 6.67430e-11  # m³/(kg⋅s²)
-        self.mu0 = 4 * jnp.pi * 1e-7  # H/m
-        self.eps0 = 8.854187817e-12  # F/m
+        self.c = 299792458.0  # Speed of light (m/s)
+        self.G = 6.67430e-11  # Gravitational constant (m³/kg·s²)
+        self.mu0 = 4*np.pi*1e-7  # Permeability of free space (H/m)
+        self.eps0 = 8.854187817e-12  # Permittivity of free space (F/m)
         
         # Target profile storage
         self.target_T00 = None
         self.target_r_array = None
+        
+        # Quantum geometry integration
+        from src.quantum_geometry.discrete_stress_energy import DiscreteQuantumGeometry
+        self.discrete_solver = DiscreteQuantumGeometry(n_nodes=20)  # Smaller for efficiency
+        self.su2_calculator = self.discrete_solver.su2_calculator
     
     def set_target_profile(self, r_array: np.ndarray, T00_profile: np.ndarray):
         """
@@ -401,6 +398,96 @@ class AdvancedCoilOptimizer:
             n_layers=10,  # Default
             wire_gauge=1e-6  # m²
         )
+    
+    def quantum_penalty(self, params: jnp.ndarray, ansatz_type: str = "gaussian") -> float:
+        """
+        Compute quantum geometry penalty from SU(2) generating functional.
+        
+        Penalizes deviations from G(K) = 1 (perfect quantum consistency).
+        
+        Args:
+            params: Current distribution parameters
+            ansatz_type: Type of current ansatz
+            
+        Returns:
+            Quantum penalty term (1/G - 1)²
+        """
+        try:
+            # Get current distribution
+            J = self.current_distribution(self.rs, params, ansatz_type)
+            
+            # Build K-matrix from current distribution
+            # Map currents to quantum geometry via adjacency structure
+            K_matrix = self._build_K_from_currents(J)
+            
+            # Compute generating functional
+            G = self.su2_calculator.compute_generating_functional(K_matrix)
+            
+            # Penalty for deviation from unity
+            penalty = (1.0/G - 1.0)**2
+            
+            return float(penalty)
+            
+        except Exception as e:
+            # Return large penalty if computation fails
+            return 1e6
+    
+    def _build_K_from_currents(self, currents: jnp.ndarray) -> jnp.ndarray:
+        """
+        Build quantum geometry K-matrix from current distribution.
+        
+        Maps electromagnetic currents to SU(2) node interactions.
+        """
+        n_nodes = self.discrete_solver.n_nodes
+        
+        # Initialize K-matrix
+        K = jnp.zeros((n_nodes, n_nodes))
+        
+        # Map current density to quantum nodes
+        # Scale currents to appropriate range for SU(2) calculations
+        current_scale = jnp.max(jnp.abs(currents))
+        if current_scale > 1e-12:
+            normalized_currents = currents / current_scale
+        else:
+            normalized_currents = currents
+        
+        # Create K-matrix based on adjacency and current strength
+        adjacency = self.discrete_solver.adjacency_matrix
+        
+        for i in range(n_nodes):
+            for j in range(n_nodes):
+                if adjacency[i, j] > 0:
+                    # Weight by current contribution
+                    r_idx = min(i * len(currents) // n_nodes, len(currents) - 1)
+                    current_weight = float(normalized_currents[r_idx])
+                    
+                    # K_ij represents interaction strength
+                    K = K.at[i, j].set(0.1 * current_weight * adjacency[i, j])
+        
+        return K
+    
+    def objective_with_quantum(self, params: jnp.ndarray, ansatz_type: str = "gaussian", 
+                             alpha: float = 1e-3) -> float:
+        """
+        Total objective function including quantum geometry penalty.
+        
+        J_total = J_classical + α * (1/G - 1)²
+        
+        Args:
+            params: Optimization parameters
+            ansatz_type: Current distribution ansatz type
+            alpha: Quantum penalty weight
+            
+        Returns:
+            Total objective value
+        """
+        # Classical stress-energy matching objective
+        J_classical = self.objective_function(params, ansatz_type)
+        
+        # Quantum geometry penalty
+        J_quantum = alpha * self.quantum_penalty(params, ansatz_type)
+        
+        return J_classical + J_quantum
 
 if __name__ == "__main__":
     # Example usage

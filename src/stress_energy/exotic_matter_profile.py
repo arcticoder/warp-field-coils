@@ -245,6 +245,108 @@ class ExoticMatterProfiler:
             fig.savefig(save_path, dpi=300, bbox_inches='tight')
         
         return fig
+    
+    def alcubierre_profile_time_dep(self, r: np.ndarray, t: float, 
+                                   R_func: Callable[[float], float], sigma: float) -> np.ndarray:
+        """
+        Compute time-dependent Alcubierre warp profile.
+        
+        Args:
+            r: Radial coordinates
+            t: Time parameter
+            R_func: Function R(t) defining bubble radius trajectory
+            sigma: Profile sharpness parameter
+            
+        Returns:
+            Time-dependent warp profile f(r,t)
+        """
+        R_t = R_func(t)
+        if R_t <= 0:
+            return np.ones_like(r)
+            
+        # f(r,t) = [tanh(σ(r-R(t))) - tanh(σ(r+R(t)))] / [2*tanh(σR(t))]
+        term1 = np.tanh(sigma * (r - R_t))
+        term2 = np.tanh(sigma * (r + R_t))
+        denominator = 2 * np.tanh(sigma * R_t)
+        
+        # Avoid division by zero
+        if abs(denominator) < 1e-12:
+            return np.ones_like(r)
+            
+        return (term1 - term2) / denominator
+    
+    def compute_T00_profile_time_dep(self, R_func: Callable[[float], float], 
+                                   sigma: float, times: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Compute time-dependent T^{00} profile for moving warp bubble.
+        
+        Args:
+            R_func: Bubble radius trajectory R(t)
+            sigma: Profile sharpness
+            times: Time array
+            
+        Returns:
+            (r_array, T00_rt): Spatial coordinates and T^{00}(r,t) array
+        """
+        T00_rt = []
+        
+        for t in times:
+            # Get warp profile at time t
+            f_rt = self.alcubierre_profile_time_dep(self.r_array, t, R_func, sigma)
+            
+            # Compute time derivatives for stress-energy tensor
+            dt = 1e-6  # Small time step for numerical differentiation
+            f_rt_plus = self.alcubierre_profile_time_dep(self.r_array, t + dt, R_func, sigma)
+            f_rt_minus = self.alcubierre_profile_time_dep(self.r_array, t - dt, R_func, sigma)
+            
+            # First and second time derivatives
+            dfdt = (f_rt_plus - f_rt_minus) / (2 * dt)
+            d2fdt2 = (f_rt_plus - 2*f_rt + f_rt_minus) / (dt**2)
+            
+            # Compute T^{00} including time-dependent terms
+            T00_t = self._compute_T00_time_dependent(self.r_array, f_rt, dfdt, d2fdt2)
+            T00_rt.append(T00_t)
+        
+        return self.r_array, np.array(T00_rt)
+    
+    def _compute_T00_time_dependent(self, r: np.ndarray, f: np.ndarray, 
+                                  dfdt: np.ndarray, d2fdt2: np.ndarray) -> np.ndarray:
+        """
+        Compute time-dependent stress-energy tensor T^{00}(r,t).
+        
+        Includes contributions from ∂f/∂t and ∂²f/∂t².
+        """
+        # Spatial derivatives
+        dfdr = np.gradient(f, r)
+        d2fdr2 = np.gradient(dfdr, r)
+        
+        # Avoid division by zero
+        r_safe = np.where(r > 1e-12, r, 1e-12)
+        f_minus_1 = f - 1
+        f_minus_1_safe = np.where(np.abs(f_minus_1) > 1e-12, f_minus_1, 1e-12)
+        
+        # Time-dependent T^{00} formula (from stress_energy.tex)
+        # T^{00} = (1/(64πr(f-1)^4)) * [spatial_terms + time_terms]
+        
+        # Spatial terms (existing)
+        spatial_terms = (
+            -r * dfdr**2 * (f_minus_1)**2 +
+            2 * r * dfdr * d2fdr2 * (f_minus_1)**3 +
+            dfdr**2 * (f_minus_1)**3
+        )
+        
+        # Time-dependent terms
+        time_terms = (
+            2 * r * (f_minus_1)**3 * d2fdt2 +
+            6 * r * (f_minus_1)**2 * dfdt**2 +
+            (f_minus_1)**3 * dfdt**2 / r_safe
+        )
+        
+        # Full T^{00} with time dependence
+        prefactor = 1.0 / (64 * np.pi * r_safe * (f_minus_1_safe)**4)
+        T00 = prefactor * (spatial_terms + time_terms)
+        
+        return T00
 
 # Example usage and standard warp bubble profiles
 def alcubierre_profile(r: float, R: float = 1.0, sigma: float = 0.1) -> float:
