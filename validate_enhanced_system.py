@@ -111,7 +111,17 @@ def main():
     # 4. ENHANCED CONTROL SYSTEM
     print("\n🎛️  Testing Enhanced Control System...")
     try:
-        from control.closed_loop_controller import ClosedLoopFieldController, PlantParams
+        # Import with explicit module path to avoid conflicts
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "closed_loop_controller", 
+            "src/control/closed_loop_controller.py"
+        )
+        control_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(control_module)
+        
+        PlantParams = control_module.PlantParams
+        ClosedLoopFieldController = control_module.ClosedLoopFieldController
         
         plant = PlantParams(K=1.0, omega_n=10.0, zeta=0.7)
         controller = ClosedLoopFieldController(plant)

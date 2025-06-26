@@ -37,6 +37,7 @@ class AdvancedCoilOptimizer:
         self.r_max = r_max
         self.n_points = n_points
         self.rs = jnp.linspace(r_min, r_max, n_points)
+        self.dr = (r_max - r_min) / (n_points - 1)  # Grid spacing
         
         # Physical constants
         self.c = 299792458.0  # Speed of light (m/s)
