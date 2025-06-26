@@ -13,6 +13,7 @@ from scipy.optimize import differential_evolution
 import matplotlib.pyplot as plt
 from typing import Dict, Tuple, Callable, Optional, List
 from dataclasses import dataclass
+import time
 
 @dataclass
 class CoilGeometryParams:
@@ -629,6 +630,294 @@ class AdvancedCoilOptimizer:
                 P_max=constraints.get('P_max', 1e6)
             ))
         }
+    
+    def compute_momentum_flux_vector(self, params: np.ndarray, 
+                                    direction: np.ndarray = None) -> np.ndarray:
+        """
+        Compute 3D momentum flux vector F⃗ from coil parameters.
+        
+        Integrates T⁰ⁱ components over the warp bubble volume:
+        F_i = ∫ T⁰ⁱ(x) d³x ≈ Σₖ T⁰ⁱₖ ΔVₖ
+        
+        Args:
+            params: Coil optimization parameters
+            direction: Optional preferred direction vector
+            
+        Returns:
+            3D momentum flux vector [Fx, Fy, Fz]
+        """
+        if not hasattr(self, 'target_r_array') or not hasattr(self, 'target_T00'):
+            print("⚠️ Target profile not set, using default for momentum flux computation")
+            # Create default angular grid
+            theta_array = np.linspace(0, np.pi, 32)
+            r_array = self.rs
+        else:
+            theta_array = getattr(self, 'theta_array', np.linspace(0, np.pi, 32))
+            r_array = self.target_r_array
+        
+        # Extract dipole parameters (assuming params includes dipole strength)
+        if len(params) >= 4:
+            eps = params[3]  # Dipole strength as 4th parameter
+        else:
+            eps = 0.1  # Default dipole strength
+        
+        # Generate dipolar warp profile
+        from stress_energy.exotic_matter_profile import alcubierre_profile_dipole
+        
+        # Estimate bubble parameters from optimization params
+        R0 = params[1] if len(params) > 1 else 2.0  # Center position as radius
+        sigma = 1.0 / (params[2] + 1e-12) if len(params) > 2 else 2.0  # Width^-1 as sharpness
+        
+        # Compute dipolar profile
+        f_profile = alcubierre_profile_dipole(r_array, theta_array, R0, sigma, eps)
+        
+        # Use profiler to compute momentum flux
+        momentum_flux = self.exotic_profiler.compute_momentum_flux_vector(
+            f_profile, r_array, theta_array
+        )
+        
+        return momentum_flux
+    
+    def steering_penalty(self, params: np.ndarray, direction: np.ndarray) -> float:
+        """
+        Compute steering penalty for directional thrust optimization.
+        
+        Maximizes thrust component along desired direction:
+        J_steer(p) = -(F⃗(p) · d̂)²
+        
+        Args:
+            params: Optimization parameters
+            direction: Unit direction vector for desired thrust
+            
+        Returns:
+            Steering penalty (negative for maximization)
+        """
+        try:
+            # Compute momentum flux vector
+            momentum_flux = self.compute_momentum_flux_vector(params, direction)
+            
+            # Normalize direction vector
+            direction_norm = direction / (np.linalg.norm(direction) + 1e-12)
+            
+            # Compute thrust component along desired direction
+            thrust_component = np.dot(momentum_flux, direction_norm)
+            
+            # Return negative squared component (minimization maximizes thrust)
+            steering_penalty = -(thrust_component**2)
+            
+            return steering_penalty
+            
+        except Exception as e:
+            print(f"⚠️ Steering penalty computation failed: {e}")
+            return 0.0  # Neutral penalty on failure
+    
+    def objective_with_steering(self, params: np.ndarray, 
+                              alpha_s: float = 1e4,
+                              direction: np.ndarray = np.array([1.0, 0.0, 0.0]),
+                              **penalty_kwargs) -> float:
+        """
+        Multi-physics objective function with steering control.
+        
+        J_total = J_classical + α_q J_quantum + α_m J_mechanical + α_t J_thermal + α_s J_steer
+        
+        Args:
+            params: Optimization parameters
+            alpha_s: Steering penalty weight
+            direction: Desired thrust direction
+            **penalty_kwargs: Additional penalty parameters
+            
+        Returns:
+            Total objective including steering
+        """
+        # Base multi-physics objective
+        base_kwargs = {
+            'alpha_q': penalty_kwargs.get('alpha_q', 1e-3),
+            'alpha_m': penalty_kwargs.get('alpha_m', 1e3),
+            'alpha_t': penalty_kwargs.get('alpha_t', 1e2),
+            'thickness': penalty_kwargs.get('thickness', 0.005),
+            'sigma_yield': penalty_kwargs.get('sigma_yield', 300e6),
+            'rho_cu': penalty_kwargs.get('rho_cu', 1.7e-8),
+            'area': penalty_kwargs.get('area', 1e-6),
+            'P_max': penalty_kwargs.get('P_max', 1e6)
+        }
+        
+        J_base = self.objective_full_multiphysics(params, **base_kwargs)
+        
+        # Steering penalty
+        J_steer = self.steering_penalty(params, direction)
+        
+        # Combined objective
+        J_total = J_base + alpha_s * J_steer
+        
+        return J_total
+    
+    def optimize_steering(self, direction: np.ndarray = np.array([1.0, 0.0, 0.0]),
+                         alpha_s: float = 1e4,
+                         initial_params: np.ndarray = None,
+                         **optimization_kwargs) -> Dict:
+        """
+        Optimize coil configuration for directional thrust.
+        
+        Args:
+            direction: Desired thrust direction vector
+            alpha_s: Steering penalty weight
+            initial_params: Initial optimization parameters
+            **optimization_kwargs: Additional optimization parameters
+            
+        Returns:
+            Steering optimization results
+        """
+        print(f"🎯 STEERABLE WARP DRIVE OPTIMIZATION")
+        print(f"Target direction: [{direction[0]:.2f}, {direction[1]:.2f}, {direction[2]:.2f}]")
+        print(f"Steering weight: α_s = {alpha_s:.0e}")
+        
+        # Default initial parameters
+        if initial_params is None:
+            initial_params = np.array([0.1, 2.0, 0.5, 0.1])  # [amplitude, center, width, dipole]
+        
+        # Ensure we have dipole parameter
+        if len(initial_params) < 4:
+            initial_params = np.append(initial_params, 0.1)  # Add dipole strength
+        
+        # Optimization bounds (include dipole bound)
+        bounds = [
+            (0.01, 5.0),   # Amplitude
+            (0.1, 10.0),   # Center
+            (0.1, 2.0),    # Width
+            (0.0, 0.5)     # Dipole strength
+        ]
+        
+        # Steering objective function
+        def steering_objective(params):
+            return self.objective_with_steering(
+                params, alpha_s=alpha_s, direction=direction, **optimization_kwargs
+            )
+        
+        # Run optimization
+        from scipy.optimize import minimize
+        
+        start_time = time.time()
+        
+        result = minimize(
+            steering_objective,
+            initial_params,
+            method='L-BFGS-B',
+            bounds=bounds,
+            options={
+                'maxiter': optimization_kwargs.get('maxiter', 200),
+                'ftol': optimization_kwargs.get('ftol', 1e-9)
+            }
+        )
+        
+        optimization_time = time.time() - start_time
+        
+        # Analyze results
+        if result.success:
+            optimal_params = result.x
+            momentum_flux = self.compute_momentum_flux_vector(optimal_params, direction)
+            thrust_magnitude = np.linalg.norm(momentum_flux)
+            thrust_direction = momentum_flux / (thrust_magnitude + 1e-12)
+            
+            # Compute alignment with desired direction
+            direction_norm = direction / np.linalg.norm(direction)
+            alignment = np.dot(thrust_direction, direction_norm)
+            
+            steering_results = {
+                'success': True,
+                'optimal_params': optimal_params,
+                'optimal_objective': result.fun,
+                'momentum_flux': momentum_flux,
+                'thrust_magnitude': thrust_magnitude,
+                'thrust_direction': thrust_direction,
+                'direction_alignment': alignment,
+                'dipole_strength': optimal_params[3] if len(optimal_params) > 3 else 0.0,
+                'optimization_time': optimization_time,
+                'iterations': result.nit,
+                'message': result.message
+            }
+            
+            print(f"✓ Steering optimization successful!")
+            print(f"  Thrust magnitude: {thrust_magnitude:.2e}")
+            print(f"  Direction alignment: {alignment:.3f}")
+            print(f"  Dipole strength: {steering_results['dipole_strength']:.3f}")
+            print(f"  Optimization time: {optimization_time:.3f}s")
+            
+        else:
+            steering_results = {
+                'success': False,
+                'message': result.message,
+                'optimization_time': optimization_time
+            }
+            
+            print(f"❌ Steering optimization failed: {result.message}")
+        
+        return steering_results
+    
+    def analyze_steering_performance(self, params: np.ndarray,
+                                   direction_grid: List[np.ndarray] = None) -> Dict:
+        """
+        Analyze steering performance across multiple directions.
+        
+        Args:
+            params: Optimized coil parameters
+            direction_grid: List of direction vectors to test
+            
+        Returns:
+            Steering performance analysis
+        """
+        if direction_grid is None:
+            # Default direction grid (6 cardinal directions)
+            direction_grid = [
+                np.array([1.0, 0.0, 0.0]),   # +X
+                np.array([-1.0, 0.0, 0.0]),  # -X
+                np.array([0.0, 1.0, 0.0]),   # +Y
+                np.array([0.0, -1.0, 0.0]),  # -Y
+                np.array([0.0, 0.0, 1.0]),   # +Z
+                np.array([0.0, 0.0, -1.0])   # -Z
+            ]
+        
+        performance_analysis = {
+            'directions': direction_grid,
+            'thrust_magnitudes': [],
+            'direction_alignments': [],
+            'steering_efficiencies': []
+        }
+        
+        print("📊 Analyzing steering performance across directions...")
+        
+        for i, direction in enumerate(direction_grid):
+            # Compute momentum flux for this direction
+            momentum_flux = self.compute_momentum_flux_vector(params, direction)
+            thrust_magnitude = np.linalg.norm(momentum_flux)
+            
+            # Compute alignment
+            if thrust_magnitude > 1e-12:
+                thrust_direction = momentum_flux / thrust_magnitude
+                direction_norm = direction / np.linalg.norm(direction)
+                alignment = np.dot(thrust_direction, direction_norm)
+            else:
+                alignment = 0.0
+            
+            # Steering efficiency (thrust per unit dipole distortion)
+            dipole_strength = params[3] if len(params) > 3 else 0.1
+            efficiency = thrust_magnitude / (dipole_strength + 1e-12)
+            
+            performance_analysis['thrust_magnitudes'].append(thrust_magnitude)
+            performance_analysis['direction_alignments'].append(alignment)
+            performance_analysis['steering_efficiencies'].append(efficiency)
+            
+            direction_label = ['X+', 'X-', 'Y+', 'Y-', 'Z+', 'Z-'][i] if i < 6 else f'D{i}'
+            print(f"  {direction_label}: |F⃗|={thrust_magnitude:.2e}, align={alignment:.3f}")
+        
+        # Summary statistics
+        performance_analysis['mean_thrust'] = np.mean(performance_analysis['thrust_magnitudes'])
+        performance_analysis['thrust_uniformity'] = np.std(performance_analysis['thrust_magnitudes'])
+        performance_analysis['mean_alignment'] = np.mean(np.abs(performance_analysis['direction_alignments']))
+        
+        print(f"✓ Mean thrust: {performance_analysis['mean_thrust']:.2e}")
+        print(f"✓ Mean alignment: {performance_analysis['mean_alignment']:.3f}")
+        
+        return performance_analysis
 
 if __name__ == "__main__":
     # Example usage

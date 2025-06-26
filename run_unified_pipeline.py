@@ -1548,5 +1548,241 @@ class UnifiedWarpFieldPipeline:
         
         return results
 
+    def step_12_directional_profile_analysis(self, eps: float = 0.1) -> Dict:
+        """
+        Step 12: Analyze directional warp bubble profiles.
+        
+        Generate and visualize dipolar warp profiles for steerable thrust.
+        
+        Args:
+            eps: Dipole distortion strength
+            
+        Returns:
+            Directional profile analysis results
+        """
+        print("🎯 Step 12: Analyzing directional warp profiles...")
+        
+        # Angular coordinates for dipolar analysis
+        theta_array = np.linspace(0, np.pi, 64)
+        
+        # Generate dipolar profile
+        from stress_energy.exotic_matter_profile import alcubierre_profile_dipole, visualize_dipolar_profile
+        
+        f_dipolar = alcubierre_profile_dipole(
+            self.exotic_profiler.r_array,
+            theta_array,
+            R0=self.config.get('warp_radius', 2.0),
+            sigma=self.config.get('warp_width', 0.5),
+            eps=eps
+        )
+        
+        # Analyze thrust characteristics
+        thrust_analysis = self.exotic_profiler.analyze_dipolar_thrust_characteristics(
+            R0=self.config.get('warp_radius', 2.0),
+            sigma=self.config.get('warp_width', 0.5),
+            eps_range=np.linspace(0, 0.5, 11)
+        )
+        
+        # Visualize dipolar profile
+        fig = visualize_dipolar_profile(
+            self.exotic_profiler.r_array,
+            theta_array,
+            f_dipolar,
+            save_path="results/step12_directional_profile.png"
+        )
+        plt.close(fig)
+        
+        # Plot thrust vs dipole strength
+        self._plot_thrust_characteristics(thrust_analysis)
+        
+        step12_results = {
+            'dipole_strength': eps,
+            'dipolar_profile': f_dipolar,
+            'theta_array': theta_array,
+            'thrust_analysis': thrust_analysis,
+            'optimal_dipole_strength': thrust_analysis['optimal_dipole_strength'],
+            'max_thrust_efficiency': thrust_analysis['max_efficiency']
+        }
+        
+        self.results['step12'] = step12_results
+        
+        print(f"✓ Directional profile analysis complete")
+        print(f"  Dipole strength: ε = {eps:.3f}")
+        print(f"  Optimal dipole: ε* = {thrust_analysis['optimal_dipole_strength']:.3f}")
+        print(f"  Max efficiency: {thrust_analysis['max_efficiency']:.2e}")
+        
+        return step12_results
+    
+    def step_13_optimize_steering(self, 
+                                 direction: Tuple[float, float, float] = (1.0, 0.0, 0.0),
+                                 alpha_s: float = 1e4) -> Dict:
+        """
+        Step 13: Optimize coil configuration for directional thrust.
+        
+        Combines multi-physics optimization with steering control to achieve
+        directional warp drive capability.
+        
+        Args:
+            direction: Desired thrust direction vector (x, y, z)
+            alpha_s: Steering penalty weight
+            
+        Returns:
+            Steering optimization results
+        """
+        print(f"🚀 Step 13: Optimizing steerable warp drive...")
+        
+        direction_array = np.array(direction)
+        
+        # Ensure coil optimizer has target profile
+        if 'step1' not in self.results:
+            print("⚠️ Running Step 1 first to establish target profile")
+            self.step_1_define_exotic_matter_profile()
+        
+        # Run steering optimization
+        steering_results = self.coil_optimizer.optimize_steering(
+            direction=direction_array,
+            alpha_s=alpha_s,
+            alpha_q=self.config.get('alpha_q', 1e-3),
+            alpha_m=self.config.get('alpha_m', 1e3),
+            alpha_t=self.config.get('alpha_t', 1e2),
+            maxiter=200
+        )
+        
+        # Analyze steering performance across multiple directions
+        if steering_results['success']:
+            performance_analysis = self.coil_optimizer.analyze_steering_performance(
+                steering_results['optimal_params']
+            )
+            steering_results['performance_analysis'] = performance_analysis
+        
+        # Generate steering visualization
+        self._plot_steering_results(steering_results, direction_array)
+        
+        step13_results = {
+            'target_direction': direction_array,
+            'steering_weight': alpha_s,
+            'optimization_results': steering_results,
+            'thrust_magnitude': steering_results.get('thrust_magnitude', 0.0),
+            'direction_alignment': steering_results.get('direction_alignment', 0.0),
+            'dipole_strength': steering_results.get('dipole_strength', 0.0)
+        }
+        
+        self.results['step13'] = step13_results
+        
+        if steering_results['success']:
+            print(f"✓ Steerable warp drive optimization successful!")
+            print(f"  Target direction: [{direction[0]:.2f}, {direction[1]:.2f}, {direction[2]:.2f}]")
+            print(f"  Thrust magnitude: {steering_results['thrust_magnitude']:.2e}")
+            print(f"  Direction alignment: {steering_results['direction_alignment']:.3f}")
+            print(f"  Dipole strength: {steering_results['dipole_strength']:.3f}")
+        else:
+            print(f"❌ Steerable optimization failed: {steering_results.get('message', 'Unknown error')}")
+        
+        return step13_results
+    
+    def _plot_thrust_characteristics(self, thrust_analysis: Dict) -> None:
+        """Plot thrust characteristics vs dipole strength."""
+        eps_values = thrust_analysis['eps_values']
+        thrust_magnitudes = thrust_analysis['thrust_magnitudes']
+        thrust_efficiencies = thrust_analysis['thrust_efficiency']
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # Thrust magnitude vs dipole strength
+        ax1.plot(eps_values, thrust_magnitudes, 'b-o', linewidth=2, markersize=6)
+        ax1.set_xlabel('Dipole Strength ε')
+        ax1.set_ylabel('Thrust Magnitude |F⃗|')
+        ax1.set_title('Thrust vs Dipole Strength')
+        ax1.grid(True, alpha=0.3)
+        
+        # Mark optimal point
+        optimal_idx = np.argmax(thrust_efficiencies)
+        ax1.axvline(x=eps_values[optimal_idx], color='r', linestyle='--', alpha=0.7, label='Optimal')
+        ax1.legend()
+        
+        # Thrust efficiency
+        ax2.plot(eps_values, thrust_efficiencies, 'g-s', linewidth=2, markersize=6)
+        ax2.set_xlabel('Dipole Strength ε')
+        ax2.set_ylabel('Thrust Efficiency (|F⃗|/ε)')
+        ax2.set_title('Thrust Efficiency')
+        ax2.grid(True, alpha=0.3)
+        ax2.axvline(x=eps_values[optimal_idx], color='r', linestyle='--', alpha=0.7, label='Optimal')
+        ax2.legend()
+        
+        plt.tight_layout()
+        plt.savefig("results/step12_thrust_characteristics.png", dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        print(f"✓ Thrust characteristics plot saved")
+    
+    def _plot_steering_results(self, steering_results: Dict, target_direction: np.ndarray) -> None:
+        """Plot steering optimization results."""
+        if not steering_results['success']:
+            return
+        
+        momentum_flux = steering_results['momentum_flux']
+        thrust_direction = steering_results['thrust_direction']
+        
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        
+        # Plot target direction
+        ax.quiver(0, 0, 0, target_direction[0], target_direction[1], target_direction[2],
+                 color='blue', arrow_length_ratio=0.1, linewidth=3, label='Target')
+        
+        # Plot actual thrust direction
+        thrust_magnitude = np.linalg.norm(momentum_flux)
+        if thrust_magnitude > 1e-12:
+            ax.quiver(0, 0, 0, thrust_direction[0], thrust_direction[1], thrust_direction[2],
+                     color='red', arrow_length_ratio=0.1, linewidth=3, label='Actual')
+        
+        # Set equal aspect ratio
+        max_range = 1.2
+        ax.set_xlim([-max_range, max_range])
+        ax.set_ylim([-max_range, max_range])
+        ax.set_zlim([-max_range, max_range])
+        
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        ax.set_title('Thrust Vector Alignment')
+        ax.legend()
+        
+        plt.savefig("results/step13_steering_vectors.png", dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # Plot performance analysis if available
+        if 'performance_analysis' in steering_results:
+            self._plot_steering_performance(steering_results['performance_analysis'])
+        
+        print(f"✓ Steering visualization saved")
+    
+    def _plot_steering_performance(self, performance_analysis: Dict) -> None:
+        """Plot steering performance across directions."""
+        directions = ['X+', 'X-', 'Y+', 'Y-', 'Z+', 'Z-']
+        thrust_magnitudes = performance_analysis['thrust_magnitudes'][:6]
+        alignments = performance_analysis['direction_alignments'][:6]
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # Thrust magnitudes
+        bars1 = ax1.bar(directions, thrust_magnitudes, color='skyblue', alpha=0.7)
+        ax1.set_ylabel('Thrust Magnitude')
+        ax1.set_title('Directional Thrust Capability')
+        ax1.grid(True, alpha=0.3)
+        
+        # Direction alignments
+        bars2 = ax2.bar(directions, alignments, color='lightcoral', alpha=0.7)
+        ax2.set_ylabel('Direction Alignment')
+        ax2.set_title('Thrust Direction Accuracy')
+        ax2.set_ylim([-1, 1])
+        ax2.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig("results/step13_steering_performance.png", dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        print(f"✓ Steering performance analysis saved")
+
 # Export alias for backward compatibility
 WarpFieldCoilPipeline = UnifiedWarpFieldPipeline

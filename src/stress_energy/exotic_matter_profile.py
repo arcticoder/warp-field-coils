@@ -566,6 +566,188 @@ class ExoticMatterProfiler:
         
         return np.argmax(combined_score)
 
+    def compute_T0r_component(self, f_profile: np.ndarray, 
+                             r_array: np.ndarray, 
+                             theta_array: np.ndarray) -> np.ndarray:
+        """
+        Compute T⁰ʳ component of stress-energy tensor for momentum flux.
+        
+        For dipolar warp bubbles, T⁰ʳ provides radial momentum flux
+        that can be projected to Cartesian coordinates for thrust computation.
+        
+        Args:
+            f_profile: Warp profile f(r,θ) 
+            r_array: Radial coordinates
+            theta_array: Angular coordinates
+            
+        Returns:
+            T⁰ʳ component array
+        """
+        # Simplified T⁰ʳ computation based on warp geometry
+        # T⁰ʳ ≈ (1/8π) G⁰ʳ where G⁰ʳ is mixed Einstein tensor component
+        
+        # Compute radial gradient of f
+        dr = r_array[1] - r_array[0] if len(r_array) > 1 else 0.01
+        df_dr = np.gradient(f_profile, dr, axis=0)
+        
+        # Angular gradient
+        if len(theta_array) > 1:
+            dtheta = theta_array[1] - theta_array[0]
+            df_dtheta = np.gradient(f_profile, dtheta, axis=1)
+        else:
+            df_dtheta = np.zeros_like(f_profile)
+        
+        # Simplified T⁰ʳ formula (dimensional analysis consistent)
+        # This would be replaced by full Einstein tensor computation in production
+        r_mesh = r_array[:, np.newaxis]
+        T0r = -(1.0 / (8 * np.pi)) * (df_dr + df_dtheta / (r_mesh + 1e-12))
+        
+        return T0r
+    
+    def compute_momentum_flux_vector(self, f_profile: np.ndarray,
+                                   r_array: np.ndarray, 
+                                   theta_array: np.ndarray,
+                                   volume_elements: np.ndarray = None) -> np.ndarray:
+        """
+        Compute 3D momentum flux vector F⃗ = ∫ T⁰ⁱ d³x.
+        
+        Integrates momentum density over the warp bubble volume
+        to obtain net thrust vector in Cartesian coordinates.
+        
+        Args:
+            f_profile: Warp profile f(r,θ)
+            r_array: Radial coordinates
+            theta_array: Angular coordinates  
+            volume_elements: Volume elements dV (optional)
+            
+        Returns:
+            3D momentum flux vector [Fx, Fy, Fz]
+        """
+        # Compute T⁰ʳ component
+        T0r = self.compute_T0r_component(f_profile, r_array, theta_array)
+        
+        # Create coordinate meshgrids
+        r_mesh, theta_mesh = np.meshgrid(r_array, theta_array, indexing='ij')
+        
+        # Volume elements in spherical coordinates: dV = r² sin θ dr dθ dφ
+        if volume_elements is None:
+            dr = r_array[1] - r_array[0] if len(r_array) > 1 else 0.01
+            dtheta = theta_array[1] - theta_array[0] if len(theta_array) > 1 else 0.01
+            dphi = 2 * np.pi  # Full azimuthal integration
+            dV = r_mesh**2 * np.sin(theta_mesh) * dr * dtheta * dphi
+        else:
+            dV = volume_elements
+        
+        # Project T⁰ʳ to Cartesian components
+        # T⁰ˣ = T⁰ʳ sin θ cos φ (φ-averaged gives 0 for axisymmetric case)
+        # T⁰ʸ = T⁰ʳ sin θ sin φ (φ-averaged gives 0 for axisymmetric case)  
+        # T⁰ᶻ = T⁰ʳ cos θ
+        
+        # For axisymmetric dipole, only z-component survives
+        T0x = T0r * np.sin(theta_mesh) * 0  # φ-averaged = 0
+        T0y = T0r * np.sin(theta_mesh) * 0  # φ-averaged = 0
+        T0z = T0r * np.cos(theta_mesh)
+        
+        # Integrate over volume
+        Fx = np.sum(T0x * dV)
+        Fy = np.sum(T0y * dV)
+        Fz = np.sum(T0z * dV)
+        
+        return np.array([Fx, Fy, Fz])
+    
+    def compute_thrust_magnitude(self, momentum_flux: np.ndarray) -> float:
+        """
+        Compute thrust magnitude from momentum flux vector.
+        
+        Args:
+            momentum_flux: 3D momentum flux vector
+            
+        Returns:
+            Thrust magnitude in Newtons
+        """
+        return np.linalg.norm(momentum_flux)
+    
+    def compute_thrust_direction(self, momentum_flux: np.ndarray) -> np.ndarray:
+        """
+        Compute unit thrust direction vector.
+        
+        Args:
+            momentum_flux: 3D momentum flux vector
+            
+        Returns:
+            Unit direction vector
+        """
+        magnitude = self.compute_thrust_magnitude(momentum_flux)
+        if magnitude > 1e-12:
+            return momentum_flux / magnitude
+        else:
+            return np.array([0.0, 0.0, 0.0])
+    
+    def analyze_dipolar_thrust_characteristics(self, R0: float, sigma: float,
+                                             eps_range: np.ndarray = None) -> Dict:
+        """
+        Analyze thrust characteristics vs dipole strength.
+        
+        Args:
+            R0: Base bubble radius
+            sigma: Profile sharpness
+            eps_range: Range of dipole strengths to test
+            
+        Returns:
+            Thrust analysis results
+        """
+        if eps_range is None:
+            eps_range = np.linspace(0, 0.5, 11)
+        
+        thrust_results = {
+            'eps_values': eps_range,
+            'thrust_magnitudes': [],
+            'thrust_directions': [],
+            'thrust_efficiency': []
+        }
+        
+        # Angular coordinates (0 to π)
+        theta_array = np.linspace(0, np.pi, 64)
+        
+        print("🚀 Analyzing dipolar thrust characteristics...")
+        
+        for i, eps in enumerate(eps_range):
+            # Compute dipolar profile
+            f_profile = alcubierre_profile_dipole(
+                self.r_array, theta_array, R0, sigma, eps
+            )
+            
+            # Compute momentum flux
+            momentum_flux = self.compute_momentum_flux_vector(
+                f_profile, self.r_array, theta_array
+            )
+            
+            # Analysis metrics
+            thrust_mag = self.compute_thrust_magnitude(momentum_flux)
+            thrust_dir = self.compute_thrust_direction(momentum_flux)
+            
+            # Thrust efficiency (thrust per unit dipole distortion)
+            efficiency = thrust_mag / (eps + 1e-12)
+            
+            # Store results
+            thrust_results['thrust_magnitudes'].append(thrust_mag)
+            thrust_results['thrust_directions'].append(thrust_dir)
+            thrust_results['thrust_efficiency'].append(efficiency)
+            
+            print(f"  ε={eps:.2f}: |F⃗|={thrust_mag:.2e}, F̂={thrust_dir}")
+        
+        # Find optimal dipole strength
+        max_eff_idx = np.argmax(thrust_results['thrust_efficiency'])
+        optimal_eps = eps_range[max_eff_idx]
+        
+        thrust_results['optimal_dipole_strength'] = optimal_eps
+        thrust_results['max_efficiency'] = thrust_results['thrust_efficiency'][max_eff_idx]
+        
+        print(f"✓ Optimal dipole strength: ε = {optimal_eps:.3f}")
+        print(f"✓ Maximum efficiency: {thrust_results['max_efficiency']:.2e}")
+        
+        return thrust_results
+
 # Example usage and standard warp bubble profiles
 def alcubierre_profile(r: float, R: float = 1.0, sigma: float = 0.1) -> float:
     """
@@ -600,6 +782,161 @@ def gaussian_warp_profile(r: float, A: float = 1.0, sigma: float = 1.0) -> float
         Shape function value f(r)
     """
     return A * np.exp(-(r/sigma)**2)
+
+def alcubierre_profile_dipole(r: np.ndarray, theta: np.ndarray, 
+                           R0: float, sigma: float, eps: float) -> np.ndarray:
+    """
+    Compute dipolar Alcubierre warp profile with angular dependence.
+    
+    Introduces first-order spherical harmonic (dipole) distortion:
+    R(θ) = R₀ + ε P₁(cos θ) = R₀ + ε cos θ
+    
+    f(r,θ) = [tanh[σ(r - R(θ))] - tanh[σ(r + R(θ))]] / [2 tanh[σ R(θ)]]
+    
+    Args:
+        r: Radial coordinate array
+        theta: Polar angle array (0 to π)
+        R0: Base bubble radius
+        sigma: Profile sharpness parameter
+        eps: Dipole distortion amplitude
+        
+    Returns:
+        Dipolar warp profile f(r,θ)
+    """
+    try:
+        import jax.numpy as jnp
+        
+        # Convert to JAX arrays
+        r_jax = jnp.array(r)
+        theta_jax = jnp.array(theta)
+        
+        # Dipolar radius modulation: R(θ) = R₀ + ε cos θ
+        R_theta = R0 + eps * jnp.cos(theta_jax)
+        
+        # Ensure R(θ) > 0 for all angles
+        R_theta = jnp.maximum(R_theta, 0.1 * R0)
+        
+        # Alcubierre profile with angular dependence
+        # Broadcasting: r[:, None] × theta[None, :]
+        if r_jax.ndim == 1 and theta_jax.ndim == 1:
+            r_mesh, theta_mesh = jnp.meshgrid(r_jax, theta_jax, indexing='ij')
+            R_mesh = R0 + eps * jnp.cos(theta_mesh)
+        else:
+            r_mesh = r_jax
+            theta_mesh = theta_jax
+            R_mesh = R0 + eps * jnp.cos(theta_mesh)
+        
+        # Warp profile computation
+        numerator = (jnp.tanh(sigma * (r_mesh - R_mesh)) - 
+                    jnp.tanh(sigma * (r_mesh + R_mesh)))
+        denominator = 2 * jnp.tanh(sigma * R_mesh)
+        
+        # Avoid division by zero
+        f_profile = jnp.where(jnp.abs(denominator) > 1e-12,
+                             numerator / denominator,
+                             0.0)
+        
+        return np.array(f_profile)
+        
+    except ImportError:
+        print("⚠️ JAX not available, using NumPy fallback for dipolar profile")
+        return _alcubierre_profile_dipole_numpy(r, theta, R0, sigma, eps)
+
+def _alcubierre_profile_dipole_numpy(r: np.ndarray, theta: np.ndarray,
+                                   R0: float, sigma: float, eps: float) -> np.ndarray:
+    """NumPy fallback for dipolar profile computation."""
+    # Dipolar radius modulation
+    if theta.ndim == 1 and r.ndim == 1:
+        r_mesh, theta_mesh = np.meshgrid(r, theta, indexing='ij')
+    else:
+        r_mesh = r
+        theta_mesh = theta
+    
+    R_theta = R0 + eps * np.cos(theta_mesh)
+    R_theta = np.maximum(R_theta, 0.1 * R0)  # Prevent negative radius
+    
+    # Alcubierre profile
+    numerator = (np.tanh(sigma * (r_mesh - R_theta)) - 
+                np.tanh(sigma * (r_mesh + R_theta)))
+    denominator = 2 * np.tanh(sigma * R_theta)
+    
+    f_profile = np.where(np.abs(denominator) > 1e-12,
+                        numerator / denominator,
+                        0.0)
+    
+    return f_profile
+
+def gaussian_warp_profile_dipole(r: np.ndarray, theta: np.ndarray,
+                               A: float, sigma: float, eps: float) -> np.ndarray:
+    """
+    Gaussian warp profile with dipolar distortion.
+    
+    Args:
+        r: Radial coordinate array
+        theta: Polar angle array
+        A: Profile amplitude
+        sigma: Gaussian width
+        eps: Dipole distortion amplitude
+        
+    Returns:
+        Dipolar Gaussian warp profile
+    """
+    if r.ndim == 1 and theta.ndim == 1:
+        r_mesh, theta_mesh = np.meshgrid(r, theta, indexing='ij')
+    else:
+        r_mesh = r
+        theta_mesh = theta
+    
+    # Angular modulation of width: σ(θ) = σ₀(1 + ε cos θ)
+    sigma_theta = sigma * (1 + eps * np.cos(theta_mesh))
+    sigma_theta = np.maximum(sigma_theta, 0.1 * sigma)  # Prevent collapse
+    
+    # Gaussian profile with angular dependence
+    f_profile = A * np.exp(-r_mesh**2 / (2 * sigma_theta**2))
+    
+    return f_profile
+
+def visualize_dipolar_profile(r_array: np.ndarray, theta_array: np.ndarray,
+                            f_profile: np.ndarray, save_path: str = None) -> plt.Figure:
+    """
+    Visualize dipolar warp profile in polar coordinates.
+    
+    Args:
+        r_array: Radial coordinates
+        theta_array: Angular coordinates
+        f_profile: Warp profile f(r,θ)
+        save_path: Optional save path
+        
+    Returns:
+        Matplotlib figure
+    """
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6),
+                                  subplot_kw={'projection': 'polar'})
+    
+    # Create meshgrid for plotting
+    R_mesh, Theta_mesh = np.meshgrid(r_array, theta_array, indexing='ij')
+    
+    # Plot 1: Full profile
+    c1 = ax1.pcolormesh(Theta_mesh.T, R_mesh.T, f_profile.T, 
+                       cmap='RdBu_r', shading='auto')
+    ax1.set_title('Dipolar Warp Profile f(r,θ)')
+    ax1.set_ylim(0, np.max(r_array))
+    plt.colorbar(c1, ax=ax1, label='f(r,θ)')
+    
+    # Plot 2: Angular cross-section at fixed radius
+    r_idx = len(r_array) // 2  # Middle radius
+    ax2.plot(theta_array, f_profile[r_idx, :], 'b-', linewidth=2)
+    ax2.set_title(f'Angular Cross-section at r={r_array[r_idx]:.2f}')
+    ax2.set_ylim(np.min(f_profile), np.max(f_profile))
+    ax2.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        fig.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"✓ Dipolar profile visualization saved to {save_path}")
+    
+    return fig
 
 if __name__ == "__main__":
     # Example usage
