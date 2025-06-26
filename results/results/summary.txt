@@ -1,0 +1,23 @@
+PIPELINE SUMMARY
+----------------------------------------
+Step 1 - Exotic Matter Profile:
+  Profile type: alcubierre
+  Has exotic regions: True
+  Total exotic energy: 4.68e+01
+Step 2 - Coil Optimization:
+  Success: False
+  Inner radius: 0.100 m
+  Outer radius: 20.404 m
+  Turn density: 5743.6 turns/m
+Step 3 - Electromagnetic Performance:
+  Peak B-field: 0.00 T
+  Peak E-field: 1.26e+00 V/m
+  Min safety margin: 8.5
+Step 4 - Resonator Diagnostics:
+  SNR: 25.6 dB
+  Agreement: poor
+Step 5 - Closed-Loop Control:
+  Settling time: 0.031 s
+  Phase margin: -135.3°
+Step 6 - Quantum Geometry:
+  Nodes: 50

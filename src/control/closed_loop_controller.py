@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from typing import Dict, Tuple, Optional, List, Callable
 from dataclasses import dataclass
 import control
-from control import TransferFunction, pid, feedback, step_response, bode_plot
+from control import TransferFunction, feedback, step_response, bode_plot
 import warnings
 
 @dataclass
@@ -147,7 +147,7 @@ class ClosedLoopFieldController:
             
             # Find poles of closed-loop system
             closed_loop_tf = feedback(open_loop_tf, 1)
-            poles = closed_loop_tf.pole()
+            poles = closed_loop_tf.poles()
             
             # Check if any pole has zero real part (marginally stable)
             real_parts = np.real(poles)

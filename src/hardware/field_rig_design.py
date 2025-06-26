@@ -225,6 +225,20 @@ class ElectromagneticFieldSimulator:
         # Identify safe operating region (safety margin > 2.0)
         safe_mask = safety_grid > 2.0
         
+        # Get safe ranges by finding which L and I values have safe points
+        safe_L_indices = np.any(safe_mask, axis=1)  # Any row with safe points
+        safe_I_indices = np.any(safe_mask, axis=0)  # Any column with safe points
+        
+        if np.any(safe_L_indices):
+            safe_L_range = (L_vals[safe_L_indices].min(), L_vals[safe_L_indices].max())
+        else:
+            safe_L_range = (0, 0)
+            
+        if np.any(safe_I_indices):
+            safe_I_range = (I_vals[safe_I_indices].min(), I_vals[safe_I_indices].max())
+        else:
+            safe_I_range = (0, 0)
+
         return {
             'L_grid': L_grid,
             'I_grid': I_grid,
@@ -232,8 +246,8 @@ class ElectromagneticFieldSimulator:
             'E_peak_grid': E_peak_grid,
             'safety_grid': safety_grid,
             'safe_mask': safe_mask,
-            'safe_L_range': (L_vals[safe_mask].min(), L_vals[safe_mask].max()) if np.any(safe_mask) else (0, 0),
-            'safe_I_range': (I_vals[safe_mask].min(), I_vals[safe_mask].max()) if np.any(safe_mask) else (0, 0)
+            'safe_L_range': safe_L_range,
+            'safe_I_range': safe_I_range
         }
     
     def plot_safety_envelope(self, sweep_results: Dict, 

@@ -71,7 +71,6 @@ class AdvancedCoilOptimizer:
         self.target_T00 = jnp.array(interp_func(self.rs))
         self.target_r_array = self.rs
     
-    @jit
     def gaussian_ansatz(self, r: jnp.ndarray, theta: jnp.ndarray) -> jnp.ndarray:
         """Multi-Gaussian ansatz for coil current distribution."""
         n_gaussians = len(theta) // 3
@@ -83,14 +82,12 @@ class AdvancedCoilOptimizer:
             f += A * jnp.exp(-((r - r_center)/sigma)**2)
         return f
     
-    @jit
     def polynomial_ansatz(self, r: jnp.ndarray, theta: jnp.ndarray) -> jnp.ndarray:
         """Polynomial ansatz with exponential envelope."""
         poly = jnp.polyval(theta[:-1], r)
         envelope = jnp.exp(-r / theta[-1])
         return poly * envelope
     
-    @jit
     def current_distribution(self, r: jnp.ndarray, params: jnp.ndarray, 
                            ansatz_type: str = "gaussian") -> jnp.ndarray:
         """
@@ -113,7 +110,6 @@ class AdvancedCoilOptimizer:
             A, sigma = params[:2]
             return A * jnp.exp(-(r/sigma)**2)
     
-    @jit
     def magnetic_field_coil(self, r: jnp.ndarray, J: jnp.ndarray) -> jnp.ndarray:
         """
         Compute magnetic field B(r) from current distribution J(r).
@@ -131,7 +127,6 @@ class AdvancedCoilOptimizer:
         B = self.mu0 * J * r / (2 * jnp.pi)
         return B
     
-    @jit
     def stress_energy_tensor_00_coil(self, r: jnp.ndarray, params: jnp.ndarray,
                                    ansatz_type: str = "gaussian") -> jnp.ndarray:
         """
@@ -166,7 +161,6 @@ class AdvancedCoilOptimizer:
         
         return T00_coil_geometric
     
-    @jit
     def objective_function(self, params: jnp.ndarray, ansatz_type: str = "gaussian") -> float:
         """
         Objective function J(p) = ∫[T^{00}_coil(r;p) - T^{00}_target(r)]² dr
@@ -186,16 +180,14 @@ class AdvancedCoilOptimizer:
         
         # Compute L2 difference
         diff = T00_coil - self.target_T00
-        objective = jnp.trapz(diff**2, self.rs)
+        objective = jnp.trapezoid(diff**2, self.rs)
         
         return objective
     
-    @jit
     def gradient_objective(self, params: jnp.ndarray, ansatz_type: str = "gaussian") -> jnp.ndarray:
         """Compute gradient of objective function using JAX autodiff."""
         return grad(lambda p: self.objective_function(p, ansatz_type))(params)
     
-    @jit
     def hessian_objective(self, params: jnp.ndarray, ansatz_type: str = "gaussian") -> jnp.ndarray:
         """Compute Hessian of objective function using JAX autodiff."""
         return hessian(lambda p: self.objective_function(p, ansatz_type))(params)
@@ -350,7 +342,7 @@ class AdvancedCoilOptimizer:
         ax3.plot(self.rs, diff, 'm-', linewidth=2, label='Difference')
         ax3.axhline(y=0, color='k', linestyle='--', alpha=0.5)
         ax3.set_xlabel('Radial Distance $r$')
-        ax3.set_ylabel('$T^{00}_{\mathrm{coil}} - T^{00}_{\mathrm{target}}$')
+        ax3.set_ylabel(r'$T^{00}_{\mathrm{coil}} - T^{00}_{\mathrm{target}}$')
         ax3.set_title('Optimization Error')
         ax3.legend()
         ax3.grid(True, alpha=0.3)
