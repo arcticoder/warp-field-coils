@@ -770,6 +770,172 @@ class DiscreteQuantumGeometry:
         T00_classical = -0.1 * normalized_currents**2  # Negative for exotic matter
         
         return T00_classical
+    
+    def analyze_mesh_convergence(self, node_counts: List[int] = [50, 100, 200, 400]) -> Dict:
+        """
+        Analyze quantum geometry convergence with increasing mesh resolution.
+        
+        Monitor max|1/G - 1| until < 10⁻⁸ for discretization error control.
+        
+        Args:
+            node_counts: List of node counts to test
+            
+        Returns:
+            Convergence analysis with anomaly tracking
+        """
+        print("🔬 Analyzing quantum geometry mesh convergence...")
+        
+        convergence_data = {
+            'node_counts': node_counts,
+            'anomalies': [],
+            'generating_functionals': [],
+            'mesh_qualities': [],
+            'computation_times': [],
+            'memory_usage': []
+        }
+        
+        for N in node_counts:
+            import time
+            import psutil
+            
+            start_time = time.time()
+            process = psutil.Process()
+            start_memory = process.memory_info().rss / 1024 / 1024  # MB
+            
+            try:
+                # Generate mesh with N nodes
+                nodes, edges = self.discrete_solver.build_discrete_mesh(
+                    r_min=0.1, r_max=10.0, n_nodes=N, mesh_type="radial"
+                )
+                
+                # Create adjacency matrix
+                adjacency = self.discrete_solver._build_adjacency_matrix(nodes, edges)
+                
+                # Generate test current configuration
+                test_currents = np.random.normal(0, 0.1, len(edges))
+                
+                # Build K-matrix from currents
+                K_matrix = self.su2_calculator.build_K_from_currents(
+                    adjacency, test_currents
+                )
+                
+                # Compute generating functional
+                G = self.su2_calculator.compute_generating_functional(K_matrix)
+                
+                # Calculate anomaly
+                anomaly = abs(1.0 / G - 1.0)
+                
+                # Mesh quality metrics
+                mesh_quality = self._assess_mesh_quality(nodes, edges)
+                
+                computation_time = time.time() - start_time
+                end_memory = process.memory_info().rss / 1024 / 1024  # MB
+                memory_usage = end_memory - start_memory
+                
+                # Store results
+                convergence_data['anomalies'].append(anomaly)
+                convergence_data['generating_functionals'].append(G)
+                convergence_data['mesh_qualities'].append(mesh_quality)
+                convergence_data['computation_times'].append(computation_time)
+                convergence_data['memory_usage'].append(memory_usage)
+                
+                print(f"  N={N:3d}: anomaly={anomaly:.2e}, G={G:.6f}, "
+                      f"time={computation_time:.3f}s, mem={memory_usage:.1f}MB")
+                
+                # Check convergence criterion
+                if anomaly < 1e-8:
+                    print(f"  ✓ Convergence achieved at N={N}")
+                
+            except Exception as e:
+                print(f"  ❌ Failed at N={N}: {e}")
+                convergence_data['anomalies'].append(np.inf)
+                convergence_data['generating_functionals'].append(np.nan)
+                convergence_data['mesh_qualities'].append(0.0)
+                convergence_data['computation_times'].append(np.inf)
+                convergence_data['memory_usage'].append(np.inf)
+        
+        # Analysis
+        optimal_N = self._find_optimal_mesh_size(convergence_data)
+        convergence_achieved = min(convergence_data['anomalies']) < 1e-8
+        
+        convergence_data['optimal_node_count'] = optimal_N
+        convergence_data['convergence_achieved'] = convergence_achieved
+        convergence_data['min_anomaly'] = min(convergence_data['anomalies'])
+        
+        print(f"✓ Optimal mesh size: N={optimal_N}")
+        print(f"✓ Min anomaly: {min(convergence_data['anomalies']):.2e}")
+        print(f"✓ Convergence: {convergence_achieved}")
+        
+        return convergence_data
+    
+    def _assess_mesh_quality(self, nodes: List, edges: List) -> float:
+        """Assess mesh quality metrics."""
+        if len(nodes) < 3:
+            return 0.0
+        
+        # Calculate node spacing uniformity
+        positions = np.array([node.position for node in nodes])
+        r_coords = np.linalg.norm(positions, axis=1)
+        
+        # Spacing uniformity (smaller is better)
+        spacing = np.diff(np.sort(r_coords))
+        spacing_uniformity = np.std(spacing) / np.mean(spacing) if len(spacing) > 0 else 1.0
+        
+        # Connectivity ratio
+        max_possible_edges = len(nodes) * (len(nodes) - 1) // 2
+        connectivity_ratio = len(edges) / max_possible_edges if max_possible_edges > 0 else 0.0
+        
+        # Combined quality score (higher is better)
+        quality = connectivity_ratio / (1 + spacing_uniformity)
+        
+        return quality
+    
+    def _find_optimal_mesh_size(self, convergence_data: Dict) -> int:
+        """Find optimal mesh size balancing accuracy and efficiency."""
+        node_counts = np.array(convergence_data['node_counts'])
+        anomalies = np.array(convergence_data['anomalies'])
+        times = np.array(convergence_data['computation_times'])
+        
+        # Remove failed cases
+        valid_mask = np.isfinite(anomalies) & np.isfinite(times)
+        if not np.any(valid_mask):
+            return node_counts[0]  # Fallback
+        
+        valid_nodes = node_counts[valid_mask]
+        valid_anomalies = anomalies[valid_mask]
+        valid_times = times[valid_mask]
+        
+        # Find first point where anomaly < 1e-6 (relaxed criterion)
+        converged_mask = valid_anomalies < 1e-6
+        if np.any(converged_mask):
+            converged_indices = np.where(converged_mask)[0]
+            # Among converged solutions, pick the one with best time/accuracy trade-off
+            scores = 1.0 / (valid_anomalies[converged_indices] * valid_times[converged_indices])
+            best_idx = converged_indices[np.argmax(scores)]
+            return valid_nodes[best_idx]
+        else:
+            # If no convergence, pick best anomaly
+            best_idx = np.argmin(valid_anomalies)
+            return valid_nodes[best_idx]
+    
+    def set_optimal_mesh_resolution(self, convergence_data: Dict) -> None:
+        """Set the optimal mesh resolution based on convergence analysis."""
+        optimal_N = convergence_data['optimal_node_count']
+        self.optimal_mesh_nodes = optimal_N
+        
+        print(f"✓ Set optimal mesh resolution: {optimal_N} nodes")
+        print(f"  Anomaly at optimal resolution: "
+              f"{convergence_data['anomalies'][convergence_data['node_counts'].index(optimal_N)]:.2e}")
+    
+    def generate_optimal_mesh(self, r_min: float = 0.1, r_max: float = 10.0) -> Tuple:
+        """Generate mesh using optimal resolution determined from convergence analysis."""
+        if hasattr(self, 'optimal_mesh_nodes'):
+            n_nodes = self.optimal_mesh_nodes
+        else:
+            print("⚠️ Optimal mesh resolution not set, using default")
+            n_nodes = 100  # Reasonable default
+        
+        return self.build_discrete_mesh(r_min, r_max, n_nodes, "radial")
 
 if __name__ == "__main__":
     # Example usage

@@ -11,6 +11,7 @@ from typing import Dict, Tuple, List, Optional, Callable
 from dataclasses import dataclass
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from datetime import datetime
 
 @dataclass
 class CoilGeometry3D:
@@ -127,6 +128,41 @@ class BiotSavart3DSolver:
         X2 = radius * np.cos(theta)
         Y2 = radius * np.sin(theta)
         Z2 = np.full_like(theta, separation/2)
+        coil2 = np.stack([X2, Y2, Z2], axis=1)
+        
+        return coil1, coil2
+    
+    def generate_helmholtz_pair(self, R: float, spacing: float, n_turns: int,
+                               n_segments: int = 200) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Generate Helmholtz coil pair with optimal field uniformity.
+        
+        Args:
+            R: Coil radius (m)
+            spacing: Coil separation distance (m)
+            n_turns: Number of turns per coil
+            n_segments: Path discretization points per coil
+            
+        Returns:
+            Tuple of (coil1_path, coil2_path) arrays
+        """
+        # Optimal Helmholtz spacing is R for maximum uniformity
+        if abs(spacing - R) > 0.1 * R:
+            print(f"⚠️ Non-optimal spacing: {spacing:.3f}m vs optimal {R:.3f}m")
+        
+        # Generate two circular coils
+        theta = np.linspace(0, 2*np.pi * n_turns, n_segments)
+        
+        # First coil at z = -spacing/2
+        X1 = R * np.cos(theta)
+        Y1 = R * np.sin(theta)
+        Z1 = np.full_like(theta, -spacing/2)
+        coil1 = np.stack([X1, Y1, Z1], axis=1)
+        
+        # Second coil at z = +spacing/2
+        X2 = R * np.cos(theta)
+        Y2 = R * np.sin(theta)
+        Z2 = np.full_like(theta, spacing/2)
         coil2 = np.stack([X2, Y2, Z2], axis=1)
         
         return coil1, coil2
@@ -297,6 +333,249 @@ class BiotSavart3DSolver:
             'extent': extent,
             'plane': plane
         }
+
+    def generate_multi_layer_toroidal(self, R0: float, a: float, n_layers: int,
+                                     n_turns_per_layer: int, layer_spacing: float = 0.01,
+                                     n_segments: int = 200) -> List[np.ndarray]:
+        """
+        Generate multi-layer toroidal coil for higher field strength.
+        
+        Args:
+            R0: Major radius (m)
+            a: Minor radius (m)
+            n_layers: Number of concentric layers
+            n_turns_per_layer: Turns per layer
+            layer_spacing: Radial spacing between layers (m)
+            n_segments: Discretization points per layer
+            
+        Returns:
+            List of coil path arrays, one per layer
+        """
+        coil_layers = []
+        
+        for layer in range(n_layers):
+            # Adjust minor radius for each layer
+            layer_a = a + layer * layer_spacing
+            
+            # Generate toroidal path for this layer
+            layer_path = self.generate_toroidal_coil(
+                R0, layer_a, n_turns_per_layer, n_segments
+            )
+            
+            coil_layers.append(layer_path)
+        
+        return coil_layers
+    
+    def export_coil_to_step(self, coil_path: np.ndarray, filename: str,
+                           conductor_radius: float = 0.001) -> None:
+        """
+        Export 3D coil geometry to STEP file for CAD integration.
+        
+        Args:
+            coil_path: (N, 3) array of 3D path points
+            filename: Output STEP filename
+            conductor_radius: Conductor cross-section radius (m)
+        """
+        try:
+            # Try to use FreeCAD Python API if available
+            import FreeCAD
+            import Part
+            
+            # Create document
+            doc = FreeCAD.newDocument()
+            
+            # Create wire from points
+            points = [FreeCAD.Vector(float(p[0]), float(p[1]), float(p[2])) 
+                     for p in coil_path]
+            
+            # Create spline through points
+            spline = Part.BSplineCurve()
+            spline.interpolate(points)
+            
+            # Create wire from spline
+            wire = Part.Wire(spline.toShape())
+            
+            # Create pipe (conductor with circular cross-section)
+            circle = Part.Circle(FreeCAD.Vector(0, 0, 0), 
+                               FreeCAD.Vector(0, 0, 1), 
+                               conductor_radius)
+            circle_wire = Part.Wire(circle.toShape())
+            
+            # Sweep circle along wire to create conductor
+            conductor = wire.makePipeShell([circle_wire], True, True)
+            
+            # Add to document
+            conductor_obj = doc.addObject("Part::Feature", "Conductor")
+            conductor_obj.Shape = conductor
+            
+            # Export to STEP
+            Part.export([conductor_obj], filename)
+            
+            # Clean up
+            FreeCAD.closeDocument(doc.Name)
+            
+            print(f"✓ Exported coil to {filename}")
+            
+        except ImportError:
+            print("⚠️ FreeCAD not available, generating simple point cloud export")
+            self._export_point_cloud(coil_path, filename.replace('.step', '_points.csv'))
+    
+    def _export_point_cloud(self, coil_path: np.ndarray, filename: str) -> None:
+        """Fallback export as CSV point cloud."""
+        import csv
+        
+        with open(filename, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(['X', 'Y', 'Z'])
+            for point in coil_path:
+                writer.writerow([f"{point[0]:.6f}", f"{point[1]:.6f}", f"{point[2]:.6f}"])
+        
+        print(f"✓ Exported point cloud to {filename}")
+    
+    def batch_export_coil_system(self, coil_system: List[CoilGeometry3D], 
+                                output_dir: str = "cad_exports") -> None:
+        """
+        Batch export complete coil system to CAD files.
+        
+        Args:
+            coil_system: List of 3D coil geometries
+            output_dir: Output directory for CAD files
+        """
+        import os
+        os.makedirs(output_dir, exist_ok=True)
+        
+        print(f"📁 Exporting {len(coil_system)} coils to {output_dir}/")
+        
+        for i, coil in enumerate(coil_system):
+            # Generate filename
+            filename = f"{output_dir}/{coil.coil_type}_{i:02d}.step"
+            
+            # Export coil
+            self.export_coil_to_step(coil.path_points, filename)
+            
+            # Export metadata
+            metadata_file = filename.replace('.step', '_metadata.json')
+            metadata = {
+                'coil_type': coil.coil_type,
+                'current': coil.current,
+                'n_turns': coil.n_turns,
+                'n_path_points': len(coil.path_points),
+                'bounding_box': {
+                    'x_min': float(np.min(coil.path_points[:, 0])),
+                    'x_max': float(np.max(coil.path_points[:, 0])),
+                    'y_min': float(np.min(coil.path_points[:, 1])),
+                    'y_max': float(np.max(coil.path_points[:, 1])),
+                    'z_min': float(np.min(coil.path_points[:, 2])),
+                    'z_max': float(np.max(coil.path_points[:, 2]))
+                }
+            }
+            
+            import json
+            with open(metadata_file, 'w') as f:
+                json.dump(metadata, f, indent=2)
+        
+        print(f"✓ Batch export complete: {len(coil_system)} coils exported")
+    
+    def generate_manufacturing_documentation(self, coil_system: List[CoilGeometry3D],
+                                           output_file: str = "manufacturing_spec.json") -> None:
+        """
+        Generate comprehensive manufacturing documentation.
+        
+        Args:
+            coil_system: List of 3D coil geometries
+            output_file: Output specification file
+        """
+        manufacturing_spec = {
+            'project_info': {
+                'name': 'Warp Field Coil System',
+                'version': '1.0',
+                'generated_date': str(datetime.now()),
+                'total_coils': len(coil_system)
+            },
+            'coil_specifications': [],
+            'material_requirements': {},
+            'manufacturing_tolerances': {
+                'position_tolerance': '±0.1mm',
+                'current_tolerance': '±1%',
+                'temperature_rating': '4.2K (superconducting)',
+                'magnetic_field_rating': '20T'
+            },
+            'assembly_instructions': []
+        }
+        
+        total_wire_length = 0.0
+        max_current = 0.0
+        
+        for i, coil in enumerate(coil_system):
+            # Calculate wire length
+            path_segments = np.diff(coil.path_points, axis=0)
+            segment_lengths = np.linalg.norm(path_segments, axis=1)
+            wire_length = np.sum(segment_lengths) * coil.n_turns
+            total_wire_length += wire_length
+            
+            max_current = max(max_current, abs(coil.current))
+            
+            # Coil specification
+            coil_spec = {
+                'coil_id': f"COIL_{i:02d}",
+                'type': coil.coil_type,
+                'current_rating': f"{coil.current:.1f}A",
+                'turns': coil.n_turns,
+                'wire_length': f"{wire_length:.2f}m",
+                'center_position': {
+                    'x': float(np.mean(coil.path_points[:, 0])),
+                    'y': float(np.mean(coil.path_points[:, 1])),
+                    'z': float(np.mean(coil.path_points[:, 2]))
+                },
+                'dimensions': {
+                    'x_span': float(np.ptp(coil.path_points[:, 0])),
+                    'y_span': float(np.ptp(coil.path_points[:, 1])),
+                    'z_span': float(np.ptp(coil.path_points[:, 2]))
+                }
+            }
+            
+            manufacturing_spec['coil_specifications'].append(coil_spec)
+        
+        # Material requirements
+        manufacturing_spec['material_requirements'] = {
+            'superconducting_wire': {
+                'total_length': f"{total_wire_length:.1f}m",
+                'recommended_type': 'YBCO or Nb3Sn',
+                'cross_section': '1mm²',
+                'critical_current': f">{max_current*1.5:.0f}A at 4.2K"
+            },
+            'support_structure': {
+                'material': 'Stainless steel 316L',
+                'cryogenic_rating': '4.2K compatible'
+            },
+            'insulation': {
+                'type': 'Kapton polyimide',
+                'thickness': '0.1mm',
+                'temperature_rating': '2K - 300K'
+            }
+        }
+        
+        # Assembly instructions
+        manufacturing_spec['assembly_instructions'] = [
+            "1. Fabricate support structure according to CAD drawings",
+            "2. Wind superconducting coils with specified turn counts",
+            "3. Install coils with ±0.1mm position tolerance",
+            "4. Connect current leads with low-resistance joints",
+            "5. Install thermal insulation and radiation shielding",
+            "6. Perform leak testing at room temperature",
+            "7. Cool down gradually to operating temperature (4.2K)",
+            "8. Verify field profiles before final assembly"
+        ]
+        
+        # Save specification
+        import json
+        with open(output_file, 'w') as f:
+            json.dump(manufacturing_spec, f, indent=2)
+        
+        print(f"✓ Manufacturing documentation saved to {output_file}")
+        print(f"  Total wire length: {total_wire_length:.1f}m")
+        print(f"  Max current: {max_current:.1f}A")
+        print(f"  Number of coils: {len(coil_system)}")
 
 def create_warp_coil_3d_system(R_bubble: float = 2.0) -> List[CoilGeometry3D]:
     """

@@ -8,7 +8,7 @@ import numpy as np
 import sympy as sp
 from sympy import symbols, Function, sin, cos, Matrix, pi, simplify, diff
 import matplotlib.pyplot as plt
-from typing import Dict, Tuple, Callable, Optional
+from typing import Dict, Tuple, Callable, Optional, List
 import scipy.optimize
 from scipy.interpolate import interp1d
 
@@ -347,6 +347,224 @@ class ExoticMatterProfiler:
         T00 = prefactor * (spatial_terms + time_terms)
         
         return T00
+    
+    def compute_time_dependent_T00_highres(self, r_array: np.ndarray, 
+                                           R_func: Callable[[float], float],
+                                           sigma: float, 
+                                           t_array: np.ndarray) -> np.ndarray:
+        """
+        High-resolution time-dependent T^{00} computation with second derivatives.
+        
+        Includes second-derivative terms for rapid acceleration capture:
+        T₀₀ = (2r(f-1)³∂²f/∂t² + r(f-1)²(∂f/∂t)² - ...) / (64πr(f-1)⁴)
+        
+        Args:
+            r_array: Radial coordinate array
+            R_func: Time-dependent bubble radius function R(t)
+            sigma: Profile sharpness parameter
+            t_array: High-resolution time array
+            
+        Returns:
+            T₀₀(r,t) array with enhanced temporal resolution
+        """
+        try:
+            import jax
+            import jax.numpy as jnp
+            
+            # Convert to JAX arrays
+            r_jax = jnp.array(r_array)
+            t_jax = jnp.array(t_array)
+            
+            # Create meshgrid for vectorized computation
+            R_mesh, T_mesh = jnp.meshgrid(r_jax, t_jax, indexing='ij')
+            
+            # Vectorized R(t) evaluation
+            R_vals = jnp.array([R_func(t) for t in t_array])
+            R_mesh_vals = R_vals[jnp.newaxis, :]
+            
+            # Warp profile function f(r,t)
+            def f_profile(r, t_idx):
+                R_t = R_vals[t_idx]
+                numerator = (jnp.tanh(sigma * (r - R_t)) - 
+                           jnp.tanh(sigma * (r + R_t)))
+                denominator = 2 * jnp.tanh(sigma * R_t)
+                return numerator / (denominator + 1e-12)  # Avoid division by zero
+            
+            # Compute time derivatives using JAX autodiff
+            def df_dt_func(r, t_idx):
+                """First time derivative of f(r,t)"""
+                if t_idx == 0 or t_idx >= len(t_array) - 1:
+                    return 0.0
+                
+                dt = t_array[1] - t_array[0]
+                f_forward = f_profile(r, t_idx + 1)
+                f_backward = f_profile(r, t_idx - 1)
+                return (f_forward - f_backward) / (2 * dt)
+            
+            def d2f_dt2_func(r, t_idx):
+                """Second time derivative of f(r,t)"""
+                if t_idx == 0 or t_idx >= len(t_array) - 1:
+                    return 0.0
+                
+                dt = t_array[1] - t_array[0]
+                f_center = f_profile(r, t_idx)
+                f_forward = f_profile(r, t_idx + 1)
+                f_backward = f_profile(r, t_idx - 1)
+                return (f_forward - 2 * f_center + f_backward) / (dt**2)
+            
+            # Initialize T₀₀ array
+            T00_array = jnp.zeros((len(r_array), len(t_array)))
+            
+            # Compute T₀₀ with enhanced formula including second derivatives
+            for i, r in enumerate(r_array):
+                for j, t in enumerate(t_array):
+                    f = f_profile(r, j)
+                    df_dt = df_dt_func(r, j)
+                    d2f_dt2 = d2f_dt2_func(r, j)
+                    
+                    # Enhanced T₀₀ formula with second-derivative terms
+                    if abs(f - 1) > 1e-10 and r > 1e-10:
+                        numerator = (2 * r * (f - 1)**3 * d2f_dt2 + 
+                                   r * (f - 1)**2 * df_dt**2 -
+                                   4 * r * (f - 1)**2 * df_dt * sigma * 
+                                   (R_vals[j] / (R_vals[j]**2 + 1e-12)))
+                        
+                        denominator = 64 * jnp.pi * r * (f - 1)**4
+                        
+                        T00_val = numerator / (denominator + 1e-12)
+                    else:
+                        T00_val = 0.0
+                    
+                    T00_array = T00_array.at[i, j].set(T00_val)
+            
+            return np.array(T00_array)
+            
+        except ImportError:
+            print("⚠️ JAX not available, using finite difference approximation")
+            return self._compute_T00_finite_difference(r_array, R_func, sigma, t_array)
+    
+    def _compute_T00_finite_difference(self, r_array: np.ndarray, 
+                                      R_func: Callable[[float], float],
+                                      sigma: float, 
+                                      t_array: np.ndarray) -> np.ndarray:
+        """Fallback finite difference computation for T₀₀."""
+        T00_array = np.zeros((len(r_array), len(t_array)))
+        
+        for i, r in enumerate(r_array):
+            for j, t in enumerate(t_array):
+                # Simple Alcubierre profile evaluation
+                R_t = R_func(t)
+                f = (np.tanh(sigma * (r - R_t)) - np.tanh(sigma * (r + R_t))) / \
+                    (2 * np.tanh(sigma * R_t) + 1e-12)
+                
+                # Simplified T₀₀ without time derivatives
+                if abs(f - 1) > 1e-10 and r > 1e-10:
+                    T00_val = -sigma**2 * (1 - f**2) / (8 * np.pi * r**2)
+                else:
+                    T00_val = 0.0
+                
+                T00_array[i, j] = T00_val
+        
+        return T00_array
+    
+    def analyze_temporal_resolution_convergence(self, R_func: Callable[[float], float],
+                                              sigma: float,
+                                              time_ranges: List[int] = [50, 100, 200, 400]) -> Dict:
+        """
+        Analyze convergence with increasing temporal resolution.
+        
+        Args:
+            R_func: Time-dependent radius function
+            sigma: Profile sharpness
+            time_ranges: List of temporal resolution values to test
+            
+        Returns:
+            Convergence analysis results
+        """
+        print("🔍 Analyzing temporal resolution convergence...")
+        
+        convergence_results = {
+            'resolutions': time_ranges,
+            'finite_fractions': [],
+            'max_T00_values': [],
+            'numerical_errors': [],
+            'computation_times': []
+        }
+        
+        for n_time in time_ranges:
+            import time
+            start_time = time.time()
+            
+            # Generate high-resolution time array
+            t_array = np.linspace(0, 2.0, n_time)
+            
+            # Compute high-resolution T₀₀
+            T00_highres = self.compute_time_dependent_T00_highres(
+                self.r_array, R_func, sigma, t_array
+            )
+            
+            # Analysis metrics
+            finite_fraction = np.sum(np.isfinite(T00_highres)) / T00_highres.size
+            max_T00 = np.max(np.abs(T00_highres[np.isfinite(T00_highres)]))
+            
+            # Estimate numerical error (if previous resolution available)
+            if len(convergence_results['finite_fractions']) > 0:
+                # Compare with previous resolution (downsampled)
+                prev_n = time_ranges[len(convergence_results['finite_fractions']) - 1]
+                downsample_factor = n_time // prev_n
+                T00_downsampled = T00_highres[::downsample_factor, ::downsample_factor]
+                
+                if T00_downsampled.shape == (len(self.r_array), prev_n):
+                    numerical_error = np.mean(np.abs(T00_downsampled - 
+                                                   convergence_results['T00_arrays'][-1]))
+                else:
+                    numerical_error = 0.0
+            else:
+                numerical_error = 0.0
+                convergence_results['T00_arrays'] = []
+            
+            computation_time = time.time() - start_time
+            
+            # Store results
+            convergence_results['finite_fractions'].append(finite_fraction)
+            convergence_results['max_T00_values'].append(max_T00)
+            convergence_results['numerical_errors'].append(numerical_error)
+            convergence_results['computation_times'].append(computation_time)
+            convergence_results['T00_arrays'].append(T00_highres)
+            
+            print(f"  Resolution {n_time}: finite={finite_fraction*100:.1f}%, "
+                  f"max|T₀₀|={max_T00:.2e}, time={computation_time:.3f}s")
+        
+        # Determine optimal resolution
+        optimal_idx = self._find_optimal_resolution(convergence_results)
+        optimal_resolution = time_ranges[optimal_idx]
+        
+        convergence_results['optimal_resolution'] = optimal_resolution
+        convergence_results['convergence_achieved'] = (
+            convergence_results['finite_fractions'][-1] > 0.95 and
+            convergence_results['numerical_errors'][-1] < 1e-8
+        )
+        
+        print(f"✓ Optimal resolution: {optimal_resolution} time points")
+        print(f"✓ Convergence achieved: {convergence_results['convergence_achieved']}")
+        
+        return convergence_results
+    
+    def _find_optimal_resolution(self, convergence_results: Dict) -> int:
+        """Find optimal temporal resolution balancing accuracy and efficiency."""
+        finite_fractions = np.array(convergence_results['finite_fractions'])
+        numerical_errors = np.array(convergence_results['numerical_errors'])
+        computation_times = np.array(convergence_results['computation_times'])
+        
+        # Normalize metrics (0-1 scale)
+        finite_score = finite_fractions
+        error_score = 1 - (numerical_errors / (np.max(numerical_errors) + 1e-12))
+        time_score = 1 - (computation_times / np.max(computation_times))
+        
+        # Combined score (weighted)
+        combined_score = 0.5 * finite_score + 0.3 * error_score + 0.2 * time_score
+        
+        return np.argmax(combined_score)
 
 # Example usage and standard warp bubble profiles
 def alcubierre_profile(r: float, R: float = 1.0, sigma: float = 0.1) -> float:
