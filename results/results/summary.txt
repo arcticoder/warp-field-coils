@@ -18,6 +18,6 @@ Step 4 - Resonator Diagnostics:
   Agreement: poor
 Step 5 - Closed-Loop Control:
   Settling time: 0.031 s
-  Phase margin: -135.3°
+  Phase margin: -135.3Â°
 Step 6 - Quantum Geometry:
   Nodes: 50
