@@ -236,7 +236,7 @@ class ExoticMatterProfiler:
         ax.axhline(y=0, color='k', linestyle='--', alpha=0.5)
         
         ax.set_xlabel('Radial Distance $r$ (units of $R_s$)')
-        ax.set_ylabel('Energy Density $T^{00}$ (units of $c^4/8\pi G$)')
+        ax.set_ylabel(r'Energy Density $T^{00}$ (units of $c^4/8\pi G$)')
         ax.set_title(title)
         ax.legend()
         ax.grid(True, alpha=0.3)

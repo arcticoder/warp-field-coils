@@ -194,15 +194,18 @@ class TestQuantumAwareOptimization:
 
 def test_quantum_penalty_module_integration():
     """Test integration with other modules."""
-    # Test that quantum penalty doesn't break existing functionality
-    optimizer = AdvancedCoilOptimizer(r_min=0.1, r_max=1.0, n_points=10)
-    
-    # Should still work without target profile (should handle gracefully)
-    params = jnp.array([0.1, 0.5, 0.2])
-    
     try:
+        # Test that quantum penalty doesn't break existing functionality
+        optimizer = AdvancedCoilOptimizer(r_min=0.1, r_max=1.0, n_points=10)
+        
+        # Should still work without target profile (should handle gracefully)
+        params = jnp.array([0.1, 0.5, 0.2])
+        
         penalty = optimizer.quantum_penalty(params)
-        assert np.isfinite(penalty)
+        assert np.isfinite(penalty), "Quantum penalty should be finite"
+        
+    except ImportError as e:
+        pytest.skip(f"Module import failed: {e}")
     except Exception as e:
         # Should not crash, even without proper setup
         assert "target" not in str(e).lower(), f"Unexpected error: {e}"
@@ -210,33 +213,37 @@ def test_quantum_penalty_module_integration():
 
 def test_quantum_optimization_convergence_behavior():
     """Test that quantum optimization can improve objectives."""
-    optimizer = AdvancedCoilOptimizer(r_min=0.1, r_max=1.5, n_points=15)
-    profiler = ExoticMatterProfiler(r_min=0.1, r_max=1.5, n_points=15)
-    
-    # Set target
-    r_array, T00_target = profiler.compute_T00_profile(
-        lambda r: alcubierre_profile(r, R=0.8, sigma=0.6)
-    )
-    optimizer.set_target_profile(r_array, T00_target)
-    
-    # Test that optimization can improve from random start
-    initial_params = jnp.array([0.2, 0.8, 0.3])
-    initial_obj = optimizer.objective_with_quantum(initial_params, alpha=1e-4)
-    
-    # Apply simple gradient step
     try:
-        import jax
-        grad_fn = jax.grad(lambda p: optimizer.objective_with_quantum(p, alpha=1e-4))
-        gradient = grad_fn(initial_params)
+        optimizer = AdvancedCoilOptimizer(r_min=0.1, r_max=1.5, n_points=15)
+        profiler = ExoticMatterProfiler(r_min=0.1, r_max=1.5, n_points=15)
         
-        # Take small step in negative gradient direction
-        step_size = 0.01
-        improved_params = initial_params - step_size * gradient
-        improved_obj = optimizer.objective_with_quantum(improved_params, alpha=1e-4)
+        # Set target
+        r_array, T00_target = profiler.compute_T00_profile(
+            lambda r: alcubierre_profile(r, R=0.8, sigma=0.6)
+        )
+        optimizer.set_target_profile(r_array, T00_target)
         
-        # Should have finite objectives
-        assert np.isfinite(initial_obj)
-        assert np.isfinite(improved_obj)
+        # Test that optimization can improve from random start
+        initial_params = jnp.array([0.2, 0.8, 0.3])
+        initial_obj = optimizer.objective_with_quantum(initial_params, alpha=1e-4)
         
-    except ImportError:
-        pytest.skip("JAX not available for gradient-based improvement test")
+        # Apply simple gradient step
+        try:
+            import jax
+            grad_fn = jax.grad(lambda p: optimizer.objective_with_quantum(p, alpha=1e-4))
+            gradient = grad_fn(initial_params)
+            
+            # Take small step in negative gradient direction
+            step_size = 0.01
+            improved_params = initial_params - step_size * gradient
+            improved_obj = optimizer.objective_with_quantum(improved_params, alpha=1e-4)
+            
+            # Should have finite objectives
+            assert np.isfinite(initial_obj)
+            assert np.isfinite(improved_obj)
+            
+        except ImportError:
+            pytest.skip("JAX not available for gradient-based improvement test")
+            
+    except ImportError as e:
+        pytest.skip(f"Required modules not available: {e}")

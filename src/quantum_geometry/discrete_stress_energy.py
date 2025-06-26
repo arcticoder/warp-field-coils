@@ -642,6 +642,135 @@ class DiscreteWarpBubbleSolver:
         
         return fig
 
+class DiscreteQuantumGeometry:
+    """
+    Unified interface for discrete quantum geometry calculations.
+    Combines SU(2) generating functional calculator with discrete mesh solver.
+    """
+    
+    def __init__(self, n_nodes: int = 20, max_j: float = 5.0):
+        """
+        Initialize discrete quantum geometry system.
+        
+        Args:
+            n_nodes: Number of discrete nodes in the mesh
+            max_j: Maximum spin quantum number
+        """
+        self.n_nodes = n_nodes
+        self.max_j = max_j
+        
+        # Initialize SU(2) calculator
+        self.su2_calculator = SU2GeneratingFunctionalCalculator(max_j=max_j)
+        
+        # Initialize discrete solver
+        self.discrete_solver = DiscreteWarpBubbleSolver(self.su2_calculator)
+        
+        # Generate adjacency matrix for mesh connectivity
+        self.adjacency_matrix = self._generate_adjacency_matrix()
+    
+    def _generate_adjacency_matrix(self) -> np.ndarray:
+        """Generate adjacency matrix for node connectivity."""
+        # Simple nearest-neighbor connectivity
+        adj = np.zeros((self.n_nodes, self.n_nodes))
+        
+        for i in range(self.n_nodes):
+            # Connect to next neighbor (circular)
+            next_node = (i + 1) % self.n_nodes
+            adj[i, next_node] = 1.0
+            adj[next_node, i] = 1.0
+            
+            # Connect to second nearest neighbor for better connectivity
+            if self.n_nodes > 4:
+                second_next = (i + 2) % self.n_nodes
+                adj[i, second_next] = 0.5
+                adj[second_next, i] = 0.5
+        
+        return adj
+    
+    def compute_generating_functional(self, K_matrix: Optional[np.ndarray] = None) -> float:
+        """
+        Compute SU(2) generating functional G(K).
+        
+        Args:
+            K_matrix: Interaction matrix (uses default if None)
+            
+        Returns:
+            Generating functional value G
+        """
+        if K_matrix is None:
+            # Default K matrix based on adjacency
+            K_matrix = 0.1 * self.adjacency_matrix
+        
+        return self.su2_calculator.compute_generating_functional(K_matrix)
+    
+    def compute_quantum_corrected_stress_energy(self, currents: np.ndarray) -> np.ndarray:
+        """
+        Compute quantum-corrected stress-energy tensor.
+        
+        Args:
+            currents: Current distribution array
+            
+        Returns:
+            Quantum-corrected stress-energy values
+        """
+        # Build K-matrix from currents
+        K_matrix = self._build_K_from_currents(currents)
+        
+        # Compute generating functional
+        G = self.compute_generating_functional(K_matrix)
+        
+        # Apply quantum correction factor
+        quantum_correction = 1.0 / G if G > 1e-12 else 1.0
+        
+        # Classical stress-energy (placeholder - would compute from currents)
+        classical_T00 = self._compute_classical_stress_energy(currents)
+        
+        # Apply quantum correction
+        corrected_T00 = classical_T00 * quantum_correction
+        
+        return corrected_T00
+    
+    def _build_K_from_currents(self, currents: np.ndarray) -> np.ndarray:
+        """Build interaction matrix from current distribution."""
+        # Ensure currents match node count
+        if len(currents) != self.n_nodes:
+            # Interpolate to match
+            currents_interp = np.interp(
+                np.linspace(0, 1, self.n_nodes),
+                np.linspace(0, 1, len(currents)),
+                currents
+            )
+        else:
+            currents_interp = currents
+        
+        # Build K-matrix
+        K = np.zeros((self.n_nodes, self.n_nodes))
+        
+        for i in range(self.n_nodes):
+            for j in range(self.n_nodes):
+                if self.adjacency_matrix[i, j] > 0:
+                    # Weight by current strength
+                    current_factor = 0.5 * (currents_interp[i] + currents_interp[j])
+                    K[i, j] = 0.1 * current_factor * self.adjacency_matrix[i, j]
+        
+        return K
+    
+    def _compute_classical_stress_energy(self, currents: np.ndarray) -> np.ndarray:
+        """Compute classical stress-energy from currents (simplified)."""
+        # Simplified classical computation
+        # In practice, this would use Maxwell stress-energy tensor
+        current_scale = np.max(np.abs(currents)) if len(currents) > 0 else 1.0
+        
+        # Mock stress-energy proportional to current squared
+        if current_scale > 1e-12:
+            normalized_currents = currents / current_scale
+        else:
+            normalized_currents = currents
+        
+        T00_classical = -0.1 * normalized_currents**2  # Negative for exotic matter
+        
+        return T00_classical
+
 if __name__ == "__main__":
     # Example usage
     
