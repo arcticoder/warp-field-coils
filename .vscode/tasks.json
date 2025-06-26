@@ -1,0 +1,24 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Unified Warp Field Pipeline",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"run_unified_pipeline.py",
+				"--config",
+				"examples/example_config.json"
+			],
+			"group": "build",
+			"isBackground": false,
+			"problemMatcher": [],
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "shared"
+			}
+		}
+	]
+}

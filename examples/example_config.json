@@ -1,0 +1,60 @@
+{
+  "description": "Example configuration for unified warp field coil pipeline",
+  
+  "spatial_parameters": {
+    "r_min": 0.1,
+    "r_max": 10.0,
+    "n_points": 1000,
+    "n_points_coil": 500
+  },
+  
+  "warp_profile": {
+    "type": "alcubierre",
+    "radius": 2.0,
+    "width": 0.5,
+    "amplitude": 1.0
+  },
+  
+  "optimization": {
+    "method": "hybrid",
+    "n_gaussians": 3,
+    "max_iterations": 1000
+  },
+  
+  "electromagnetic": {
+    "modulation_frequency": 1000.0,
+    "max_current": 100000.0,
+    "max_voltage": 1000000.0,
+    "max_b_field": 50.0
+  },
+  
+  "resonator": {
+    "frequency": 1e9,
+    "cavity_volume": 1e-6,
+    "quality_factor": 1e6,
+    "coupling_strength": 0.1,
+    "temperature": 0.01,
+    "measurement_duration": 1e-3,
+    "sampling_rate": 10e9
+  },
+  
+  "control": {
+    "sample_time": 1e-4,
+    "bandwidth": 100.0,
+    "delay": 0.001,
+    "simulation_time": 10.0
+  },
+  
+  "discrete_geometry": {
+    "mesh_nodes": 50,
+    "mesh_type": "radial",
+    "max_j": 10.0,
+    "numerical_precision": 1e-12
+  },
+  
+  "output": {
+    "save_plots": true,
+    "output_format": "png",
+    "dpi": 300
+  }
+}
