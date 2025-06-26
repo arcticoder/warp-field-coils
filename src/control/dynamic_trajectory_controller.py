@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from scipy.optimize import minimize_scalar, root_scalar
 from scipy.integrate import solve_ivp
 import time
+import logging
 
 @dataclass
 class TrajectoryParams:
@@ -408,6 +409,230 @@ class DynamicTrajectoryController:
         print(f"  Acceleration tracking RMS: {accel_tracking_error:.3f} m/s²")
         print(f"  Max dipole strength: {max_dipole_used:.3f}")
         print(f"  Control success rate: {results['performance_metrics']['control_success_rate']*100:.1f}%")
+        
+        return results
+    
+    def simulate_trajectory_rk45(self, 
+                                velocity_profile: Callable[[float], float], 
+                                simulation_time: float,
+                                initial_conditions: Optional[Dict] = None) -> Dict:
+        """
+        Advanced trajectory simulation using SciPy's adaptive RK45 integrator
+        
+        Fixes numerical stability issues by:
+        1. Using adaptive step size control
+        2. Higher-order Runge-Kutta method (RK45)
+        3. Proper error bounds and tolerances
+        4. Avoiding manual array indexing errors
+        
+        Mathematical formulation:
+        dy/dt = [dv/dt, dx/dt] = [a(t), v(t)]
+        where a(t) = F(ε*(dv/dt))/m_eff
+        
+        Args:
+            velocity_profile: Function t -> desired velocity
+            simulation_time: Total simulation duration
+            initial_conditions: Initial state dictionary
+            
+        Returns:
+            Dictionary with trajectory results and performance metrics
+        """
+        # Initialize conditions
+        if initial_conditions is None:
+            initial_conditions = {
+                'velocity': 0.0,
+                'position': 0.0,
+                'bubble_radius': 2.0
+            }
+        
+        m_eff = self.params.effective_mass
+        bubble_radius = initial_conditions.get('bubble_radius', 2.0)
+        
+        # Numerical differentiation helper for acceleration
+        def compute_acceleration_target(t, dt=1e-6):
+            """Compute target acceleration from velocity profile using finite differences"""
+            if t <= dt:
+                v_next = velocity_profile(t + dt)
+                v_curr = velocity_profile(t)
+                return (v_next - v_curr) / dt
+            else:
+                v_curr = velocity_profile(t)
+                v_prev = velocity_profile(t - dt)
+                return (v_curr - v_prev) / dt
+        
+        # Storage for additional tracking
+        dipole_history = []
+        force_history = []
+        error_history = []
+        
+        def dynamics_function(t, y):
+            """
+            System dynamics for RK45 integration
+            
+            State vector y = [velocity, position]
+            Returns dy/dt = [acceleration, velocity]
+            """
+            velocity, position = y
+            
+            # Compute target acceleration from velocity profile
+            try:
+                target_acceleration = compute_acceleration_target(t)
+                
+                # Solve for required dipole strength
+                dipole_strength, solve_success = self.solve_dipole_for_acceleration(
+                    target_acceleration, bubble_radius
+                )
+                
+                if solve_success:
+                    # Compute actual thrust force
+                    thrust_force = self.compute_thrust_force(dipole_strength, bubble_radius)
+                    actual_acceleration = thrust_force / m_eff
+                    
+                    # Store for analysis
+                    dipole_history.append(dipole_strength)
+                    force_history.append(thrust_force)
+                    error_history.append(abs(actual_acceleration - target_acceleration))
+                    
+                else:
+                    # Fallback if dipole solution fails
+                    actual_acceleration = 0.0
+                    dipole_history.append(0.0)
+                    force_history.append(0.0)
+                    error_history.append(abs(target_acceleration))
+                    
+                    logging.warning(f"Dipole solution failed at t={t:.3f}s")
+                
+            except Exception as e:
+                logging.error(f"Dynamics computation failed at t={t:.3f}s: {e}")
+                actual_acceleration = 0.0
+                dipole_history.append(0.0)
+                force_history.append(0.0)
+                error_history.append(float('inf'))
+            
+            return [actual_acceleration, velocity]
+        
+        # Initial state vector
+        y0 = [initial_conditions['velocity'], initial_conditions['position']]
+        
+        # Time span
+        t_span = (0, simulation_time)
+        
+        print(f"🚀 Starting RK45 trajectory simulation")
+        print(f"  Duration: {simulation_time}s")
+        print(f"  Initial state: v={y0[0]:.2f} m/s, x={y0[1]:.2f} m")
+        print(f"  Effective mass: {m_eff:.2e} kg")
+        
+        start_time = time.time()
+        
+        # Solve using adaptive RK45 integrator
+        try:
+            solution = solve_ivp(
+                dynamics_function,
+                t_span,
+                y0,
+                method='RK45',
+                atol=self.params.integration_tolerance,
+                rtol=self.params.integration_tolerance * 10,
+                dense_output=True,
+                max_step=1.0 / self.params.control_frequency,  # Respect control frequency
+                first_step=1.0 / (self.params.control_frequency * 10)  # Start with small step
+            )
+            
+            if not solution.success:
+                raise RuntimeError(f"RK45 integration failed: {solution.message}")
+                
+        except Exception as e:
+            logging.error(f"RK45 simulation failed: {e}")
+            # Return minimal results for debugging
+            return {
+                'success': False,
+                'error': str(e),
+                'time': np.array([0]),
+                'velocity': np.array([y0[0]]),
+                'position': np.array([y0[1]])
+            }
+        
+        computation_time = time.time() - start_time
+        
+        # Extract solution
+        t_eval = solution.t
+        velocities = solution.y[0]
+        positions = solution.y[1]
+        
+        # Compute accelerations by differentiating velocity
+        accelerations = np.gradient(velocities, t_eval)
+        
+        # Pad tracking arrays to match solution length if needed
+        n_points = len(t_eval)
+        if len(dipole_history) < n_points:
+            # Pad with last values or zeros
+            last_dipole = dipole_history[-1] if dipole_history else 0.0
+            last_force = force_history[-1] if force_history else 0.0
+            last_error = error_history[-1] if error_history else 0.0
+            
+            while len(dipole_history) < n_points:
+                dipole_history.append(last_dipole)
+                force_history.append(last_force)
+                error_history.append(last_error)
+        
+        # Trim if too long
+        dipole_history = dipole_history[:n_points]
+        force_history = force_history[:n_points]
+        error_history = error_history[:n_points]
+        
+        # Compute target profiles for comparison
+        target_velocities = np.array([velocity_profile(t) for t in t_eval])
+        target_accelerations = np.array([compute_acceleration_target(t) for t in t_eval])
+        
+        # Performance metrics
+        velocity_error = np.mean(np.abs(velocities - target_velocities))
+        acceleration_error = np.mean(np.abs(accelerations - target_accelerations))
+        max_dipole = np.max(np.abs(dipole_history))
+        
+        results = {
+            'success': True,
+            'time': t_eval,
+            'velocity': velocities,
+            'position': positions,
+            'acceleration': accelerations,
+            'dipole_strength': np.array(dipole_history),
+            'thrust_force': np.array(force_history),
+            'control_error': np.array(error_history),
+            'target_velocity': target_velocities,
+            'target_acceleration': target_accelerations,
+            
+            'simulation_metadata': {
+                'method': 'RK45_adaptive',
+                'simulation_time': simulation_time,
+                'computation_time': computation_time,
+                'n_steps': len(t_eval),
+                'avg_step_size': simulation_time / len(t_eval),
+                'initial_conditions': initial_conditions,
+                'solver_stats': {
+                    'n_fev': solution.nfev,
+                    'n_jev': solution.njev,
+                    'n_lu': solution.nlu,
+                    'success': solution.success,
+                    'message': solution.message
+                }
+            },
+            
+            'performance_metrics': {
+                'velocity_tracking_rms': velocity_error,
+                'acceleration_tracking_rms': acceleration_error,
+                'max_dipole_strength': max_dipole,
+                'dipole_efficiency': max_dipole / self.params.max_dipole_strength,
+                'control_stability': 'stable' if np.all(np.isfinite(error_history)) else 'unstable',
+                'solution_success_rate': np.mean([e < 1e6 for e in error_history])
+            }
+        }
+        
+        print(f"✅ RK45 simulation complete:")
+        print(f"  Computation time: {computation_time:.3f}s")
+        print(f"  Solution points: {len(t_eval)}")
+        print(f"  Velocity tracking RMS: {velocity_error:.3e} m/s")
+        print(f"  Acceleration tracking RMS: {acceleration_error:.3e} m/s²")
+        print(f"  Max dipole used: {max_dipole:.3f}")
         
         return results
     
