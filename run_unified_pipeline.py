@@ -7,11 +7,12 @@ Integrates all components from the comprehensive roadmap
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Dict, Tuple, Optional, List
-import argparse
+import argparse 
 import json
 import os
 import datetime
 from pathlib import Path
+from scipy.optimize import minimize
 
 # Import all our modules
 from src.stress_energy.exotic_matter_profile import ExoticMatterProfiler, alcubierre_profile, gaussian_warp_profile
@@ -66,6 +67,7 @@ class UnifiedWarpFieldPipeline:
         
         # Results storage
         self.results = {}
+        self.results_dir = Path("results")  # Add missing results directory
         
     def _load_config(self, config_file: Optional[str]) -> Dict:
         """Load configuration from file or use defaults."""
@@ -546,8 +548,7 @@ class UnifiedWarpFieldPipeline:
                     
                     result = self.coil_optimizer.optimize_lbfgs(
                         initial_guess, 
-                        maxiter=50,  # Faster for sweep
-                        use_quantum=True
+                        maxiter=50
                     )
                     
                     if result['success']:
@@ -1546,3 +1547,6 @@ class UnifiedWarpFieldPipeline:
         }
         
         return results
+
+# Export alias for backward compatibility
+WarpFieldCoilPipeline = UnifiedWarpFieldPipeline
