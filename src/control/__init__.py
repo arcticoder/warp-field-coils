@@ -18,7 +18,7 @@ except ImportError as e:
     MULTI_AXIS_AVAILABLE = False
 
 try:
-    from .closed_loop_controller import ClosedLoopFieldController, PlantParams, ControllerParams, ControlPerformance
+    from .closed_loop_controller import ClosedLoopFieldController, PlantParams, ControllerParams, ControlPerformance, TransferFunction
     CLOSED_LOOP_AVAILABLE = True
 except ImportError as e:
     print(f"Closed loop controller not available: {e}")
@@ -28,7 +28,7 @@ except ImportError as e:
 __all__ = []
 
 if CLOSED_LOOP_AVAILABLE:
-    __all__.extend(['ClosedLoopFieldController', 'PlantParams', 'ControllerParams', 'ControlPerformance'])
+    __all__.extend(['ClosedLoopFieldController', 'PlantParams', 'ControllerParams', 'ControlPerformance', 'TransferFunction'])
 
 if DYNAMIC_AVAILABLE:
     __all__.extend(['DynamicTrajectoryController', 'TrajectoryParams', 'TrajectoryState'])
