@@ -25,8 +25,8 @@ from .control import (
 # Communication systems
 from .subspace_transceiver import (
     SubspaceTransceiver,
-    TransceiverParams,
-    MessagePriority
+    SubspaceParams,
+    TransmissionParams
 )
 
 # Holographic force-field systems
@@ -63,8 +63,8 @@ __all__ = [
     
     # Communication
     "SubspaceTransceiver",
-    "TransceiverParams",
-    "MessagePriority",
+    "SubspaceParams",
+    "TransmissionParams",
     
     # Holodeck systems
     "ForceFieldGrid",

@@ -1,0 +1,19 @@
+{
+  "polymer_enhancement": 1.5304606075815945,
+  "enhanced_profile_max": 1.5304606075815945,
+  "signal_quality": {
+    "snr": 4.746822585990353,
+    "signal_power": 0.0006743836500307515,
+    "noise_power": 0.00022606054591793915,
+    "coherence": 0.9996629386094752,
+    "stability": -0.5948228939622899
+  },
+  "spatial_resolution": 4.596194077712559,
+  "field_contrast": 0.9999999999999872,
+  "reconstruction_fidelity": 0.6956448139464557,
+  "phase_computation_range": [
+    -7.217919391384612e-07,
+    158.19265562017887
+  ],
+  "validation_status": "PASS"
+}

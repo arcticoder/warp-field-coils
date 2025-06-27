@@ -2613,11 +2613,11 @@ class UnifiedWarpFieldPipeline:
         if 'step1' in self.results:
             T00_profile = self.results['step1']['T00_profile']
         else:
-            # Enhanced default profile
-            T00_profile = alcubierre_profile(
-                self.exotic_profiler.r_array, 
+            # Enhanced default profile using vectorized approach
+            T00_profile = self.exotic_profiler.compute_polymer_enhanced_profile(
                 R=app_config.get('optimal_radius', 2.0), 
-                sigma=app_config.get('profile_sharpness', 0.8)
+                sigma=app_config.get('profile_sharpness', 0.8),
+                enhancement_factor=pulse_data.get('enhancement_factor', 1.0)
             )
         
         # Compute enhanced T^{0r} component with polymer corrections
@@ -3074,148 +3074,148 @@ class UnifiedWarpFieldPipeline:
         
         return integration_results
 
-# Helper methods for enhanced functionality
-def _compute_xi_mu(self, mu: float) -> float:
-    """Compute polymer enhancement factor ξ(μ)."""
-    try:
-        # Enhanced polymer enhancement formula
-        sinc_term = mu / np.sin(mu) if mu != 0 else 1.0
-        modulation_term = 1 + 0.1 * np.cos(2 * np.pi * mu / 5)
-        stability_term = 1 + (mu**2 * np.exp(-mu)) / 10
+    # Helper methods for enhanced functionality
+    def _compute_xi_mu(self, mu: float) -> float:
+        """Compute polymer enhancement factor ξ(μ)."""
+        try:
+            # Enhanced polymer enhancement formula
+            sinc_term = mu / np.sin(mu) if mu != 0 else 1.0
+            modulation_term = 1 + 0.1 * np.cos(2 * np.pi * mu / 5)
+            stability_term = 1 + (mu**2 * np.exp(-mu)) / 10
+            
+            return sinc_term * modulation_term * stability_term
+        except:
+            return 1.0  # Fallback
+
+    def _compute_signal_quality(self, phase_shifts: np.ndarray) -> Dict:
+        """Compute signal quality metrics."""
         
-        return sinc_term * modulation_term * stability_term
-    except:
-        return 1.0  # Fallback
-
-def _compute_signal_quality(self, phase_shifts: np.ndarray) -> Dict:
-    """Compute signal quality metrics."""
-    
-    signal_power = np.var(phase_shifts)
-    noise_power = np.var(np.diff(phase_shifts))  # Estimate from derivatives
-    
-    snr = 10 * np.log10(signal_power / (noise_power + 1e-12))
-    
-    return {
-        'snr': snr,
-        'signal_power': signal_power,
-        'noise_power': noise_power,
-        'coherence': np.abs(np.mean(np.exp(1j * phase_shifts))),
-        'stability': 1.0 - np.std(phase_shifts) / (np.mean(np.abs(phase_shifts)) + 1e-12)
-    }
-
-def _estimate_spatial_resolution(self, field: np.ndarray) -> float:
-    """Estimate spatial resolution from reconstructed field."""
-    
-    # Find the full width at half maximum (FWHM)
-    field_magnitude = np.abs(field)
-    max_val = np.max(field_magnitude)
-    half_max = max_val / 2
-    
-    # Find points above half maximum
-    above_half_max = field_magnitude > half_max
-    
-    if np.any(above_half_max):
-        # Estimate characteristic length scale
-        coords = np.where(above_half_max)
-        if len(coords[0]) > 1:
-            extent = np.sqrt((np.max(coords[0]) - np.min(coords[0]))**2 + 
-                           (np.max(coords[1]) - np.min(coords[1]))**2)
-            # Convert to physical units (assuming grid spans -8 to 8 meters)
-            resolution = extent * 16.0 / field.shape[0]
-            return resolution
-    
-    return 1e-3  # Default 1mm resolution
-
-def _analyze_field_contrast(self, field: np.ndarray) -> float:
-    """Analyze field contrast (dynamic range)."""
-    
-    field_magnitude = np.abs(field)
-    max_val = np.max(field_magnitude)
-    min_val = np.min(field_magnitude)
-    
-    if max_val > 0:
-        contrast = (max_val - min_val) / max_val
-        return contrast
-    else:
-        return 0.0
-
-def _compute_reconstruction_fidelity(self, field: np.ndarray) -> float:
-    """Compute reconstruction fidelity metric."""
-    
-    # Analyze field properties that indicate good reconstruction
-    field_magnitude = np.abs(field)
-    
-    # Smoothness metric (lower gradients = better reconstruction)
-    gy, gx = np.gradient(field_magnitude)
-    gradient_magnitude = np.sqrt(gx**2 + gy**2)
-    smoothness = 1.0 / (1.0 + np.mean(gradient_magnitude))
-    
-    # Energy concentration metric
-    total_energy = np.sum(field_magnitude**2)
-    peak_energy = np.max(field_magnitude**2)
-    concentration = peak_energy / (total_energy + 1e-12)
-    
-    # Combined fidelity metric
-    fidelity = 0.7 * smoothness + 0.3 * min(concentration, 1.0)
-    
-    return min(fidelity, 1.0)
-
-def _plot_enhanced_tomographic_results(self, tomographic_data: Dict, 
-                                     reconstructed_fields: Dict, 
-                                     performance_metrics: Dict) -> None:
-    """Generate comprehensive visualization of enhanced tomographic results."""
-    
-    import matplotlib.pyplot as plt
-    from matplotlib.gridspec import GridSpec
-    
-    # Create comprehensive figure
-    fig = plt.figure(figsize=(20, 16))
-    gs = GridSpec(4, 5, figure=fig)
-    
-    # Color schemes for different applications
-    colormaps = {
-        'subspace_transceiver': 'plasma',
-        'holodeck_grid': 'viridis', 
-        'medical_array': 'coolwarm'
-    }
-    
-    app_names = list(reconstructed_fields.keys())
-    
-    # Top row: Reconstructed fields for each application
-    for i, (app_name, field) in enumerate(reconstructed_fields.items()):
-        ax = fig.add_subplot(gs[0, i])
+        signal_power = np.var(phase_shifts)
+        noise_power = np.var(np.diff(phase_shifts))  # Estimate from derivatives
         
-        # Plot magnitude of reconstructed field
+        snr = 10 * np.log10(signal_power / (noise_power + 1e-12))
+        
+        return {
+            'snr': snr,
+            'signal_power': signal_power,
+            'noise_power': noise_power,
+            'coherence': np.abs(np.mean(np.exp(1j * phase_shifts))),
+            'stability': 1.0 - np.std(phase_shifts) / (np.mean(np.abs(phase_shifts)) + 1e-12)
+        }
+
+    def _estimate_spatial_resolution(self, field: np.ndarray) -> float:
+        """Estimate spatial resolution from reconstructed field."""
+        
+        # Find the full width at half maximum (FWHM)
         field_magnitude = np.abs(field)
-        im = ax.imshow(field_magnitude, cmap=colormaps.get(app_name, 'viridis'), 
-                      origin='lower', extent=[-8, 8, -8, 8])
-        ax.set_title(f'{app_name.replace("_", " ").title()}\nReconstructed Field')
-        ax.set_xlabel('x (m)')
-        ax.set_ylabel('y (m)')
-        plt.colorbar(im, ax=ax, label='Field Magnitude')
-    
-    # Second row: Phase information
-    for i, (app_name, field) in enumerate(reconstructed_fields.items()):
-        ax = fig.add_subplot(gs[1, i])
+        max_val = np.max(field_magnitude)
+        half_max = max_val / 2
         
-        # Plot phase of reconstructed field
-        field_phase = np.angle(field)
-        im = ax.imshow(field_phase, cmap='hsv', origin='lower', extent=[-8, 8, -8, 8])
-        ax.set_title(f'{app_name.replace("_", " ").title()}\nPhase Information')
-        ax.set_xlabel('x (m)')
-        ax.set_ylabel('y (m)')
-        plt.colorbar(im, ax=ax, label='Phase (rad)')
-    
-    # Third row: Performance metrics comparison
-    ax_metrics = fig.add_subplot(gs[2, :3])
-    
-    metrics_to_plot = ['spatial_resolution', 'signal_to_noise_ratio', 'reconstruction_fidelity']
-    x_pos = np.arange(len(app_names))
-    width = 0.25
-    
-    for i, metric in enumerate(metrics_to_plot):
-        values = [performance_metrics[app][metric] for app in app_names if metric in performance_metrics[app]]
-        if values:
-            ax_metrics.bar(x_pos + i*width, values, width, label=metric.replace('_', ' ').title())
-    
-    ax_metrics.set_xlabel('Application')
+        # Find points above half maximum
+        above_half_max = field_magnitude > half_max
+        
+        if np.any(above_half_max):
+            # Estimate characteristic length scale
+            coords = np.where(above_half_max)
+            if len(coords[0]) > 1:
+                extent = np.sqrt((np.max(coords[0]) - np.min(coords[0]))**2 + 
+                               (np.max(coords[1]) - np.min(coords[1]))**2)
+                # Convert to physical units (assuming grid spans -8 to 8 meters)
+                resolution = extent * 16.0 / field.shape[0]
+                return resolution
+        
+        return 1e-3  # Default 1mm resolution
+
+    def _analyze_field_contrast(self, field: np.ndarray) -> float:
+        """Analyze field contrast (dynamic range)."""
+        
+        field_magnitude = np.abs(field)
+        max_val = np.max(field_magnitude)
+        min_val = np.min(field_magnitude)
+        
+        if max_val > 0:
+            contrast = (max_val - min_val) / max_val
+            return contrast
+        else:
+            return 0.0
+
+    def _compute_reconstruction_fidelity(self, field: np.ndarray) -> float:
+        """Compute reconstruction fidelity metric."""
+        
+        # Analyze field properties that indicate good reconstruction
+        field_magnitude = np.abs(field)
+        
+        # Smoothness metric (lower gradients = better reconstruction)
+        gy, gx = np.gradient(field_magnitude)
+        gradient_magnitude = np.sqrt(gx**2 + gy**2)
+        smoothness = 1.0 / (1.0 + np.mean(gradient_magnitude))
+        
+        # Energy concentration metric
+        total_energy = np.sum(field_magnitude**2)
+        peak_energy = np.max(field_magnitude**2)
+        concentration = peak_energy / (total_energy + 1e-12)
+        
+        # Combined fidelity metric
+        fidelity = 0.7 * smoothness + 0.3 * min(concentration, 1.0)
+        
+        return min(fidelity, 1.0)
+
+    def _plot_enhanced_tomographic_results(self, tomographic_data: Dict, 
+                                         reconstructed_fields: Dict, 
+                                         performance_metrics: Dict) -> None:
+        """Generate comprehensive visualization of enhanced tomographic results."""
+        
+        import matplotlib.pyplot as plt
+        from matplotlib.gridspec import GridSpec
+        
+        # Create comprehensive figure
+        fig = plt.figure(figsize=(20, 16))
+        gs = GridSpec(4, 5, figure=fig)
+        
+        # Color schemes for different applications
+        colormaps = {
+            'subspace_transceiver': 'plasma',
+            'holodeck_grid': 'viridis', 
+            'medical_array': 'coolwarm'
+        }
+        
+        app_names = list(reconstructed_fields.keys())
+        
+        # Top row: Reconstructed fields for each application
+        for i, (app_name, field) in enumerate(reconstructed_fields.items()):
+            ax = fig.add_subplot(gs[0, i])
+            
+            # Plot magnitude of reconstructed field
+            field_magnitude = np.abs(field)
+            im = ax.imshow(field_magnitude, cmap=colormaps.get(app_name, 'viridis'), 
+                          origin='lower', extent=[-8, 8, -8, 8])
+            ax.set_title(f'{app_name.replace("_", " ").title()}\nReconstructed Field')
+            ax.set_xlabel('x (m)')
+            ax.set_ylabel('y (m)')
+            plt.colorbar(im, ax=ax, label='Field Magnitude')
+        
+        # Second row: Phase information
+        for i, (app_name, field) in enumerate(reconstructed_fields.items()):
+            ax = fig.add_subplot(gs[1, i])
+            
+            # Plot phase of reconstructed field
+            field_phase = np.angle(field)
+            im = ax.imshow(field_phase, cmap='hsv', origin='lower', extent=[-8, 8, -8, 8])
+            ax.set_title(f'{app_name.replace("_", " ").title()}\nPhase Information')
+            ax.set_xlabel('x (m)')
+            ax.set_ylabel('y (m)')
+            plt.colorbar(im, ax=ax, label='Phase (rad)')
+        
+        # Third row: Performance metrics comparison
+        ax_metrics = fig.add_subplot(gs[2, :3])
+        
+        metrics_to_plot = ['spatial_resolution', 'signal_to_noise_ratio', 'reconstruction_fidelity']
+        x_pos = np.arange(len(app_names))
+        width = 0.25
+        
+        for i, metric in enumerate(metrics_to_plot):
+            values = [performance_metrics[app][metric] for app in app_names if metric in performance_metrics[app]]
+            if values:
+                ax_metrics.bar(x_pos + i*width, values, width, label=metric.replace('_', ' ').title())
+        
+        ax_metrics.set_xlabel('Application')

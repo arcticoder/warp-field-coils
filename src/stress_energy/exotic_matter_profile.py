@@ -747,6 +747,38 @@ class ExoticMatterProfiler:
         print(f"✓ Maximum efficiency: {thrust_results['max_efficiency']:.2e}")
         
         return thrust_results
+    
+    def compute_polymer_enhanced_profile(self, R: float, sigma: float, enhancement_factor: float) -> np.ndarray:
+        """
+        Compute polymer-enhanced exotic matter profile.
+        
+        Implements the enhanced warp profile with polymer corrections:
+        T^{00}_enhanced(r) = T^{00}_base(r) × ξ(μ)
+        
+        Args:
+            R: Bubble radius
+            sigma: Profile sharpness parameter
+            enhancement_factor: Polymer enhancement factor ξ(μ)
+            
+        Returns:
+            Enhanced T^{00} profile array
+        """
+        # Compute base Alcubierre profile using vectorized approach
+        base_profile = np.zeros_like(self.r_array)
+        
+        # Vectorized implementation of Alcubierre profile
+        inner_mask = self.r_array <= R - sigma
+        outer_mask = self.r_array >= R + sigma
+        transition_mask = ~(inner_mask | outer_mask)
+        
+        base_profile[inner_mask] = 1.0
+        base_profile[outer_mask] = 0.0
+        base_profile[transition_mask] = 0.5 * (1 - np.tanh((self.r_array[transition_mask] - R) / sigma))
+        
+        # Apply polymer enhancement
+        enhanced_profile = base_profile * enhancement_factor
+        
+        return enhanced_profile
 
 # Example usage and standard warp bubble profiles
 def alcubierre_profile(r: float, R: float = 1.0, sigma: float = 0.1) -> float:
