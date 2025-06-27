@@ -11,8 +11,25 @@ import scipy.optimize as opt
 import matplotlib.pyplot as plt
 from typing import Dict, Tuple, Optional, List, Callable
 from dataclasses import dataclass
-import control
-from control import TransferFunction, feedback, step_response, bode_plot
+try:
+    import control as control_lib
+    from control_lib import TransferFunction, feedback, step_response, bode_plot
+    CONTROL_AVAILABLE = True
+except ImportError:
+    try:
+        # Alternative import path
+        from control import TransferFunction, feedback, step_response, bode_plot
+        CONTROL_AVAILABLE = True
+    except ImportError:
+        print("Warning: python-control library not available")
+        CONTROL_AVAILABLE = False
+        # Mock implementations
+        class TransferFunction:
+            def __init__(self, *args, **kwargs): pass
+        def feedback(*args, **kwargs): return None
+        def step_response(*args, **kwargs): return None, None
+        def bode_plot(*args, **kwargs): return None, None, None
+
 import warnings
 
 @dataclass
