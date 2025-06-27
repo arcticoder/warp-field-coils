@@ -10,11 +10,16 @@ from typing import Dict, Tuple, Optional, List
 import argparse 
 import json
 import os
+import sys
 import datetime
 from pathlib import Path
 from scipy.optimize import minimize
-import numpy as np
-import matplotlib.pyplot as plt
+
+# Add src directory to Python path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+src_dir = os.path.join(current_dir, 'src')
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
 
 # Import all our modules
 from src.stress_energy.exotic_matter_profile import ExoticMatterProfiler, alcubierre_profile, gaussian_warp_profile
@@ -1095,7 +1100,8 @@ class UnifiedWarpFieldPipeline:
         try:
             # Import sensitivity analyzer
             import sys
-            sys.path.append('scripts')
+            import os
+            sys.path.append(os.path.join(os.path.dirname(__file__), 'scripts'))
             from sensitivity_analysis import SensitivityAnalyzer
             
             # Create analyzer
@@ -1555,7 +1561,7 @@ class UnifiedWarpFieldPipeline:
         print("-" * 60)
         
         try:
-            from field_solver.biot_savart_3d import BiotSavart3DSolver, create_warp_coil_3d_system
+            from src.field_solver.biot_savart_3d import BiotSavart3DSolver, create_warp_coil_3d_system
             
             # Create 3D coil system
             coil_system_3d = create_warp_coil_3d_system(R_bubble=enhanced_config['R'])
@@ -1587,7 +1593,7 @@ class UnifiedWarpFieldPipeline:
         print("-" * 60)
         
         try:
-            from optimization.multi_objective import MultiObjectiveOptimizer, create_default_constraints
+            from src.optimization.multi_objective import MultiObjectiveOptimizer, create_default_constraints
             
             # Create multi-objective optimizer
             mo_optimizer = MultiObjectiveOptimizer(self.coil_optimizer, constraints)
@@ -1623,7 +1629,7 @@ class UnifiedWarpFieldPipeline:
         print("-" * 60)
         
         try:
-            from validation.fdtd_solver import FDTDValidator
+            from src.validation.fdtd_solver import FDTDValidator
             
             # Create FDTD validator
             fdtd_validator = FDTDValidator(use_meep=False)  # Mock for now
@@ -1718,7 +1724,7 @@ class UnifiedWarpFieldPipeline:
         theta_array = np.linspace(0, np.pi, 64)
         
         # Generate dipolar profile
-        from stress_energy.exotic_matter_profile import alcubierre_profile_dipole, visualize_dipolar_profile
+        from src.stress_energy.exotic_matter_profile import alcubierre_profile_dipole, visualize_dipolar_profile
         
         f_dipolar = alcubierre_profile_dipole(
             self.exotic_profiler.r_array,
@@ -1859,7 +1865,7 @@ class UnifiedWarpFieldPipeline:
         print(f"🚀 Step 14: Dynamic trajectory control simulation")
         
         # Import dynamic controller
-        from dynamic_trajectory_controller import DynamicTrajectoryController, TrajectoryParams
+        from src.dynamic_trajectory_controller import DynamicTrajectoryController, TrajectoryParams
         
         # Define trajectory parameters based on system configuration
         trajectory_params = TrajectoryParams(
@@ -2008,7 +2014,7 @@ class UnifiedWarpFieldPipeline:
         print(f"  Total duration: {simulation_time:.1f}s")
         
         # Initialize multi-axis controller
-        from dynamic_trajectory_controller import DynamicTrajectoryController, TrajectoryParams
+        from src.dynamic_trajectory_controller import DynamicTrajectoryController, TrajectoryParams
         
         trajectory_params = TrajectoryParams(
             effective_mass=self.config.get('effective_mass', 1e-20),
