@@ -26,8 +26,8 @@ except ImportError as e:
 
 # Enhanced IDF and SIF systems
 try:
-    from .enhanced_inertial_damper_field import EnhancedInertialDamperField, IDFParams
-    from .enhanced_structural_integrity_field import EnhancedStructuralIntegrityField, SIFParams
+    from .enhanced_inertial_damper import EnhancedInertialDamperField
+    from .enhanced_structural_integrity import EnhancedStructuralIntegrityField
     ENHANCED_CONTROL_AVAILABLE = True
 except ImportError as e:
     print(f"Enhanced control systems not available: {e}")
@@ -46,4 +46,4 @@ if MULTI_AXIS_AVAILABLE:
     __all__.extend(['MultiAxisController', 'MultiAxisParams'])
 
 if ENHANCED_CONTROL_AVAILABLE:
-    __all__.extend(['EnhancedInertialDamperField', 'IDFParams', 'EnhancedStructuralIntegrityField', 'SIFParams'])
+    __all__.extend(['EnhancedInertialDamperField', 'EnhancedStructuralIntegrityField'])
