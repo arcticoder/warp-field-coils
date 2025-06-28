@@ -21,6 +21,10 @@
 			"path": "../negative-energy-generator"
 		},
 		{
+			"name": "polymerized-lqg-matter-transporter",
+			"path": "../polymerized-lqg-matter-transporter"
+		},
+		{
 			"name": "su2-3nj-closedform",
 			"path": "../su2-3nj-closedform"
 		},
