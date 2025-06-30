@@ -12,7 +12,7 @@ The unified warp field system now integrates four advanced subsystems with compr
 **Keywords**: multi-objective optimization, genetic algorithm, parameter bounds, convergence monitoring
 
 **Mathematical Foundation**:
-```latex
+```math
 J(\mathbf{p}) = w_1(1 - \text{RateNorm}(\mathbf{p})) + w_2(1 - \text{Uniformity}(\mathbf{p})) + w_3(1 - \text{Precision}(\mathbf{p})) + w_4(1 - \text{Fidelity}(\mathbf{p}))
 ```
 
@@ -31,10 +31,10 @@ J(\mathbf{p}) = w_1(1 - \text{RateNorm}(\mathbf{p})) + w_2(1 - \text{Uniformity}
 **Keywords**: finite differences, Monte Carlo sampling, Sobol indices, variance decomposition
 
 **Mathematical Foundation**:
-```latex
+```math
 \frac{\partial \text{Performance}}{\partial \kappa} \approx \frac{f(\kappa + h) - f(\kappa - h)}{2h}
 ```
-```latex
+```math
 S_i = \frac{\text{Var}[E[Y|X_i]]}{\text{Var}[Y]}, \quad S_T^i = 1 - \frac{\text{Var}[E[Y|X_{\sim i}]]}{\text{Var}[Y]}
 ```
 
@@ -53,7 +53,7 @@ S_i = \frac{\text{Var}[E[Y|X_i]]}{\text{Var}[Y]}, \quad S_T^i = 1 - \frac{\text{
 **Keywords**: frequency-dependent coupling, dispersion relation, group velocity, bandwidth optimization
 
 **Mathematical Foundation**:
-```latex
+```math
 \varepsilon_{\text{eff}}(\omega) = \varepsilon_0\left(1 + \kappa_0 e^{-\left(\frac{\omega-\omega_0}{\sigma}\right)^2}\right)
 ```
 
@@ -72,7 +72,7 @@ S_i = \frac{\text{Var}[E[Y|X_i]]}{\text{Var}[Y]}, \quad S_T^i = 1 - \frac{\text{
 **Keywords**: cone-beam geometry, FDK algorithm, trilinear interpolation, volumetric reconstruction
 
 **Mathematical Foundation**:
-```latex
+```math
 f(x,y,z) = \frac{1}{2\pi} \int_0^{2\pi} \left[\frac{SOD}{SOD + x\cos\theta + y\sin\theta}\right]^2 \text{FilteredProjection}(\theta) \, d\theta
 ```
 
@@ -91,7 +91,7 @@ f(x,y,z) = \frac{1}{2\pi} \int_0^{2\pi} \left[\frac{SOD}{SOD + x\cos\theta + y\s
 **Keywords**: error estimation, gradient indicators, octree refinement, mesh adaptation
 
 **Mathematical Foundation**:
-```latex
+```math
 \eta_i = ||\nabla V(\mathbf{x}_i)||, \quad \text{refine if } \eta_i > \eta_{\text{tol}}
 ```
 
@@ -110,7 +110,7 @@ f(x,y,z) = \frac{1}{2\pi} \int_0^{2\pi} \left[\frac{SOD}{SOD + x\cos\theta + y\s
 **Keywords**: vital signs monitoring, power density limits, emergency shutdown, safety interlocks
 
 **Mathematical Foundation**:
-```latex
+```math
 P_{\text{density}} < 10 \text{ mW/cm}^2, \quad F_{\text{max}} < 1 \mu\text{N}
 ```
 
@@ -129,7 +129,7 @@ P_{\text{density}} < 10 \text{ mW/cm}^2, \quad F_{\text{max}} < 1 \mu\text{N}
 **Keywords**: threshold validation, performance ratios, system status, automated monitoring
 
 **Mathematical Foundation**:
-```latex
+```math
 \text{Performance Ratio} = \frac{\text{Measured}}{\text{Threshold}}, \quad \text{Status} = \prod_i \text{Pass}_i
 ```
 

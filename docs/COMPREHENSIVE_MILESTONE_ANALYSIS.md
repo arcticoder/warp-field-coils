@@ -28,7 +28,7 @@ The warp field coils project has achieved **unprecedented integration** across m
 #### Enhanced Inertial Damper Field (IDF) System
 - **File**: `src/control/enhanced_inertial_damper.py` (267 lines)
 - **Mathematical Foundation**: 
-  ```latex
+  ```math
   T^{jerk}_{\mu\nu} = \begin{bmatrix} 
     \frac{1}{2}\rho||j||^2 & \rho j^T \\
     \rho j & -\frac{1}{2}\rho||j||^2 I
@@ -41,7 +41,7 @@ The warp field coils project has achieved **unprecedented integration** across m
 #### Enhanced Structural Integrity Field (SIF) System  
 - **File**: `src/control/enhanced_structural_integrity.py` (418 lines)
 - **Mathematical Foundation**:
-  ```latex
+  ```math
   \sigma^{SIF}_{ij} = -K_{SIF} \cdot \sigma_{ij}
   \quad \text{where} \quad \sigma_{ij} = \mu \cdot C_{ij} + \alpha R \delta_{ij} + \text{LQG corrections}
   ```
@@ -63,7 +63,7 @@ The warp field coils project has achieved **unprecedented integration** across m
 **Keywords**: `subspace transceiver`, `holodeck force-field`, `medical tractor array`, `monorepo integration`
 
 **Mathematical Foundation**:
-```latex
+```math
 \frac{\partial²ψ}{\partial t²} = c_s²∇²ψ - κ²ψ \quad \text{(Subspace wave equation)}
 ```
 
@@ -86,11 +86,11 @@ The warp field coils project has achieved **unprecedented integration** across m
 **Keywords**: `time-dependent profiles`, `quantum-aware optimization`, `SU(2) generating functional`
 
 **Mathematical Foundation**:
-```latex
+```math
 f(r,t) = f_0 \tanh\left(\frac{r_s(t) - ||\mathbf{r} - \mathbf{R}(t)||}{σ}\right)
 ```
 
-```latex
+```math
 G = \frac{1}{\sqrt{\det(I - K)}} \quad \text{(SU(2) generating functional)}
 ```
 
@@ -113,7 +113,7 @@ G = \frac{1}{\sqrt{\det(I - K)}} \quad \text{(SU(2) generating functional)}
 **Keywords**: `Sobol indices`, `variance decomposition`, `Monte Carlo sampling`, `parameter robustness`
 
 **Mathematical Foundation**:
-```latex
+```math
 S_i = \frac{\text{Var}[E[Y|X_i]]}{\text{Var}[Y]}, \quad S_T^i = 1 - \frac{\text{Var}[E[Y|X_{\sim i}]]}{\text{Var}[Y]}
 ```
 
@@ -136,7 +136,7 @@ S_i = \frac{\text{Var}[E[Y|X_i]]}{\text{Var}[Y]}, \quad S_T^i = 1 - \frac{\text{
 **Keywords**: `medical-grade safety`, `vital signs monitoring`, `power density limits`, `emergency shutdown`
 
 **Mathematical Foundation**:
-```latex
+```math
 P_{\text{density}} < 10 \text{ mW/cm}², \quad F_{\text{max}} < 1 μ\text{N}
 ```
 

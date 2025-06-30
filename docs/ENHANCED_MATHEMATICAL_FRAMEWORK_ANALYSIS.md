@@ -15,7 +15,7 @@ Status: DEPLOYMENT READY ✅
 **Keywords**: `stress-energy tensor`, `Einstein equations`, `curvature coupling`, `LQG corrections`, `medical-grade safety`
 
 **Mathematical Foundation**:
-```latex
+```math
 \mathbf{a}_{\rm IDF} = \mathbf{a}_{\rm base} + \mathbf{a}_{\rm curvature} + \mathbf{a}_{\rm backreaction}
 ```
 where:
@@ -23,7 +23,7 @@ where:
 - $\mathbf{a}_{\rm curvature} = \lambda_c R \mathbf{j}$ (Curvature coupling)  
 - $\mathbf{a}_{\rm backreaction} = -\frac{\alpha_{\max}}{\rho_{\rm eff}}\|\mathbf{j}\|^2\,\mathbf{u}$ (Backreaction damping)
 
-```latex
+```math
 \sigma_{ij}^{\rm SIF} = \sigma_{ij}^{\rm base} + \sigma_{ij}^{\rm ricci} + \sigma_{ij}^{\rm LQG}
 ```
 where:
@@ -45,7 +45,7 @@ where:
 **Keywords**: `pipeline integration`, `step 14b`, `medical safety compliance`, `system diagnostics`
 
 **Mathematical Foundation**: Integration framework combining:
-```latex
+```math
 \text{Enhanced Control} = \text{IDF}(\mathbf{j}, g_{\mu\nu}) \oplus \text{SIF}(\sigma_{ij}, g_{\mu\nu})
 ```
 
@@ -62,7 +62,7 @@ where:
 **Keywords**: `medical-grade safety`, `acceleration limits`, `stress limits`, `emergency shutdown`
 
 **Mathematical Foundation**:
-```latex
+```math
 \|\mathbf{a}\| \leq 5 \text{ m/s}^2, \quad \|\sigma_{ij}\|_F \leq 1 \times 10^{-6} \text{ N/m}^2
 ```
 
@@ -79,7 +79,7 @@ where:
 **Keywords**: `stress-energy tensor`, `jerk field`, `Einstein equations`, `backreaction`
 
 **Mathematical Foundation**:
-```latex
+```math
 T^{jerk}_{\mu\nu} = \begin{bmatrix}
 \frac{1}{2}\rho_{\rm eff}\|\mathbf{j}\|^2 & \rho_{\rm eff} \mathbf{j}^T \\
 \rho_{\rm eff} \mathbf{j} & -\frac{1}{2}\rho_{\rm eff}\|\mathbf{j}\|^2 I_3
@@ -99,7 +99,7 @@ T^{jerk}_{\mu\nu} = \begin{bmatrix}
 **Keywords**: `LQG corrections`, `polymer quantization`, `quantum geometry`, `Ricci coupling`
 
 **Mathematical Foundation**:
-```latex
+```math
 \sigma_{ij}^{\rm LQG} = \alpha_{\rm LQG} f_{\rm polymer}(C_{ij}, R)
 ```
 where $f_{\rm polymer}$ encodes polymer quantization effects from loop quantum gravity.
@@ -118,7 +118,7 @@ where $f_{\rm polymer}$ encodes polymer quantization effects from loop quantum g
 **Keywords**: `real-time computation`, `performance tracking`, `computational efficiency`
 
 **Mathematical Foundation**: Performance optimization targeting:
-```latex
+```math
 t_{\rm computation} < 1 \text{ ms}, \quad \text{throughput} > 1000 \text{ Hz}
 ```
 
@@ -136,7 +136,7 @@ t_{\rm computation} < 1 \text{ ms}, \quad \text{throughput} > 1000 \text{ Hz}
 **Keywords**: `mathematical validation`, `safety testing`, `performance verification`
 
 **Mathematical Foundation**: Validation framework testing:
-```latex
+```math
 \text{Validation} = \bigcap_{i} \text{Test}_i(\text{IDF}, \text{SIF}, \text{Safety}, \text{Performance})
 ```
 
