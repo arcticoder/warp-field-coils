@@ -5,6 +5,18 @@
 			"path": "."
 		},
 		{
+			"name": "artificial-gravity-field-generator",
+			"path": "../artificial-gravity-field-generator"
+		},
+		{
+			"name": "casimir-environmental-enclosure-platform",
+			"path": "../casimir-environmental-enclosure-platform"
+		},
+		{
+			"name": "casimir-tunable-permittivity-stacks",
+			"path": "../casimir-tunable-permittivity-stacks"
+		},
+		{
 			"name": "elemental-transmutator",
 			"path": "../elemental-transmutator"
 		},
@@ -13,12 +25,40 @@
 			"path": "../energy"
 		},
 		{
+			"name": "enhanced-simulation-hardware-abstraction-framework",
+			"path": "../enhanced-simulation-hardware-abstraction-framework"
+		},
+		{
 			"name": "lqg-anec-framework",
 			"path": "../lqg-anec-framework"
 		},
 		{
+			"name": "lqg-first-principles-fine-structure-constant",
+			"path": "../lqg-first-principles-fine-structure-constant"
+		},
+		{
+			"name": "lqg-ftl-metric-engineering",
+			"path": "../lqg-ftl-metric-engineering"
+		},
+		{
+			"name": "lqg-polymer-field-generator",
+			"path": "../lqg-polymer-field-generator"
+		},
+		{
+			"name": "lqg-positive-matter-assembler",
+			"path": "../lqg-positive-matter-assembler"
+		},
+		{
+			"name": "lqg-volume-quantization-controller",
+			"path": "../lqg-volume-quantization-controller"
+		},
+		{
 			"name": "negative-energy-generator",
 			"path": "../negative-energy-generator"
+		},
+		{
+			"name": "polymer-fusion-framework",
+			"path": "../polymer-fusion-framework"
 		},
 		{
 			"name": "polymerized-lqg-matter-transporter",
