@@ -3,6 +3,8 @@ Electromagnetic Field Solver
 
 Implements FDTD and analytical electromagnetic field computation for warp field coils.
 Integrates with MEEP for high-fidelity simulation and provides real-time field analysis.
+
+Enhanced with LQG-corrected electromagnetic fields and polymer-enhanced coil design.
 """
 
 import numpy as np
@@ -10,6 +12,16 @@ from typing import Tuple, Optional, Dict, List
 from dataclasses import dataclass
 import scipy.optimize as opt
 from scipy.constants import mu_0, epsilon_0, c
+
+# Import LQG Enhanced Field components
+from .lqg_enhanced_fields import (
+    LQGEnhancedFieldGenerator,
+    LQGFieldConfig,
+    LQGFieldDiagnostics,
+    PolymerEnhancement,
+    create_enhanced_field_coils,
+    validate_enhanced_field_system
+)
 
 
 @dataclass
@@ -277,6 +289,37 @@ def create_helmholtz_coils(radius: float = 0.1, separation: float = 0.1,
     return [coil1, coil2]
 
 
+def create_lqg_enhanced_helmholtz_system(radius: float = 0.1, separation: float = 0.1,
+                                       current: float = 100.0, 
+                                       lqg_config: Optional[LQGFieldConfig] = None) -> Tuple[List[CoilGeometry], LQGEnhancedFieldGenerator]:
+    """
+    Create Helmholtz coil system with LQG enhancement.
+    
+    Args:
+        radius: Coil radius (m)
+        separation: Coil separation (m) 
+        current: Coil current (A)
+        lqg_config: Optional LQG field configuration
+        
+    Returns:
+        Tuple of (classical_coils, lqg_enhanced_generator)
+    """
+    # Create classical Helmholtz coils
+    classical_coils = create_helmholtz_coils(radius, separation, current)
+    
+    # Create LQG enhanced field generator
+    if lqg_config is None:
+        lqg_config = LQGFieldConfig(
+            enhancement_factor=1.5,
+            polymer_coupling=0.15,
+            metamaterial_amplification=1e10
+        )
+    
+    lqg_generator = create_enhanced_field_coils(lqg_config)
+    
+    return classical_coils, lqg_generator
+
+
 def run_field_solver_demo():
     """Demonstration of electromagnetic field solver capabilities."""
     print("🔬 Electromagnetic Field Solver Demo")
@@ -318,5 +361,53 @@ def run_field_solver_demo():
     print("\n🎯 Field solver demonstration complete!")
 
 
+def run_lqg_enhanced_field_demo():
+    """Demonstration of LQG-enhanced electromagnetic field capabilities."""
+    print("\n🔬 LQG Enhanced Field Demo")
+    print("=" * 50)
+    
+    # Create LQG-enhanced Helmholtz system
+    classical_coils, lqg_generator = create_lqg_enhanced_helmholtz_system(
+        radius=0.05, separation=0.05, current=100.0
+    )
+    
+    # Test field generation
+    test_positions = np.array([
+        [0.0, 0.0, 0.0],    # Center
+        [0.01, 0.0, 0.0],   # Off-center x
+        [0.0, 0.01, 0.0],   # Off-center y
+        [0.0, 0.0, 0.025]   # Midway between coils
+    ])
+    
+    test_currents = np.array([coil.current for coil in classical_coils])
+    coil_positions = np.array([coil.position for coil in classical_coils])
+    
+    # Generate LQG-corrected field
+    print("🔧 Generating LQG-corrected electromagnetic field...")
+    field_result = lqg_generator.generate_lqg_corrected_field(
+        test_positions, test_currents, coil_positions
+    )
+    
+    # Analyze results
+    diagnostics = LQGFieldDiagnostics(lqg_generator)
+    analysis = diagnostics.analyze_polymer_enhancement(field_result)
+    
+    print(f"✅ LQG field generation complete:")
+    print(f"   Enhancement ratio: {analysis['enhancement_ratio']:.3f}×")
+    print(f"   Field uniformity: {analysis['field_uniformity']:.1%}")
+    print(f"   Stability rating: {analysis['stability_rating']}")
+    print(f"   Polymer effectiveness: {analysis['polymer_effectiveness']:+.1%}")
+    
+    # Validate LQG corrections
+    validation = lqg_generator.validate_lqg_corrections(field_result)
+    print(f"\n🔍 LQG Validation:")
+    print(f"   Overall valid: {'✅' if validation['overall_valid'] else '❌'}")
+    print(f"   Safety compliant: {'✅' if validation['safety_compliant'] else '❌'}")
+    print(f"   Max field: {validation['max_field_tesla']:.2f} T")
+    
+    print("\n🎯 LQG enhanced field demonstration complete!")
+
+
 if __name__ == "__main__":
     run_field_solver_demo()
+    run_lqg_enhanced_field_demo()

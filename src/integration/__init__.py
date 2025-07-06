@@ -6,6 +6,7 @@ Provides interfaces for integrating warp field coils with other systems:
 - Warp bubble optimizers
 - LQG-QFT frameworks
 - Hardware control systems
+- LQG Enhanced Field Coils with polymer corrections
 """
 
 import numpy as np
@@ -14,6 +15,19 @@ from dataclasses import dataclass
 import json
 import asyncio
 import logging
+
+# Import LQG Framework Integration
+try:
+    from .lqg_framework_integration import (
+        LQGFrameworkIntegrator,
+        LQGIntegrationConfig,
+        EnhancedFieldCoilsIntegration,
+        setup_enhanced_field_coils_with_lqg,
+        validate_lqg_ecosystem_integration
+    )
+    LQG_INTEGRATION_AVAILABLE = True
+except ImportError:
+    LQG_INTEGRATION_AVAILABLE = False
 
 
 @dataclass
@@ -378,7 +392,51 @@ async def run_integration_demo():
         print(f"   Power requirement: {field_config['power_requirements']/1e6:.1f} MW")
         print(f"   Configuration valid: {'✅ Yes' if field_config['success'] else '❌ No'}")
     
+    # LQG Framework Integration Demo
+    if LQG_INTEGRATION_AVAILABLE:
+        print("\n🔬 LQG Framework Integration Demo...")
+        await run_lqg_integration_demo()
+    else:
+        print("\n⚠️ LQG Framework Integration not available")
+    
     print("\n🎯 Integration demonstration complete!")
+
+
+async def run_lqg_integration_demo():
+    """Demonstration of LQG framework integration."""
+    try:
+        # Validate LQG ecosystem
+        ecosystem_validation = await validate_lqg_ecosystem_integration()
+        
+        print(f"   LQG Ecosystem Ready: {'✅' if ecosystem_validation['ecosystem_ready'] else '❌'}")
+        print(f"   Recommended Mode: {ecosystem_validation['recommended_mode']}")
+        
+        # Test Enhanced Field Coils integration
+        from ..field_solver.lqg_enhanced_fields import create_enhanced_field_coils, LQGFieldConfig
+        
+        lqg_config = LQGFieldConfig(enhancement_factor=1.5, polymer_coupling=0.15)
+        field_generator = create_enhanced_field_coils(lqg_config)
+        
+        integration = await setup_enhanced_field_coils_with_lqg(field_generator)
+        integration_summary = integration.get_integration_summary()
+        
+        print(f"   Enhanced Field Coils Ready: {'✅' if integration_summary['integration_ready'] else '❌'}")
+        print(f"   LQG Polymer Corrections: {'✅' if integration_summary['lqg_framework']['system_capabilities']['lqg_polymer_corrections'] else '❌'}")
+        
+        # Test field generation
+        test_positions = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+        test_currents = np.array([1000.0])
+        test_coil_positions = np.array([[0.0, 0.0, 0.0]])
+        
+        field_result = field_generator.generate_lqg_corrected_field(
+            test_positions, test_currents, test_coil_positions
+        )
+        
+        print(f"   Field Enhancement: {field_result.enhancement_ratio:.3f}×")
+        print(f"   Stability Metric: {field_result.stability_metric:.4f}")
+        
+    except Exception as e:
+        print(f"   ❌ LQG integration demo failed: {e}")
 
 
 if __name__ == "__main__":
