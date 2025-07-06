@@ -297,25 +297,47 @@ class LQGEnhancedFieldGenerator:
     
     def _apply_hardware_enhancement(self, field: np.ndarray) -> np.ndarray:
         """
-        Apply hardware abstraction layer enhancement.
+        Apply enhanced hardware abstraction layer enhancement.
         
         Integrates with Enhanced Simulation Hardware Abstraction Framework
-        for metamaterial amplification and precision measurements.
+        for metamaterial amplification, digital twin validation, and multi-physics coupling.
         """
         if not self.hardware_interface:
             self.logger.warning("⚠️ Hardware interface not connected, skipping enhancement")
             return field
         
-        # Query hardware precision measurements
+        # Query enhanced hardware precision measurements
         precision_data = self.hardware_interface.get_precision_measurements()
         precision_factor = precision_data.get('precision_factor', self.config.precision_factor)
+        enhanced_precision = precision_data.get('enhanced_precision_factor', precision_factor)
         
-        # Apply metamaterial amplification
-        amplification = self.config.metamaterial_amplification
-        metamaterial_enhanced = field * amplification * precision_factor
+        # Apply metamaterial amplification with enhanced framework
+        amplification = self.hardware_interface.get_metamaterial_amplification()
+        metamaterial_enhanced = field * amplification * enhanced_precision
         
-        # Digital twin validation
-        validated_field = self.hardware_interface.validate_field_configuration(metamaterial_enhanced)
+        # Multi-physics coupling enhancement
+        if hasattr(self.hardware_interface, 'get_multi_physics_coupling'):
+            coupling_params = self.hardware_interface.get_multi_physics_coupling()
+            thermal_coupling = coupling_params.get('thermal_coupling', 1.0)
+            mechanical_coupling = coupling_params.get('mechanical_coupling', 1.0)
+            
+            # Apply cross-domain enhancements
+            multi_physics_factor = (thermal_coupling * mechanical_coupling) ** 0.5
+            metamaterial_enhanced *= multi_physics_factor
+        
+        # Digital twin validation with enhanced correlation
+        if hasattr(self.hardware_interface, 'get_digital_twin_state'):
+            twin_state = self.hardware_interface.get_digital_twin_state()
+            synchronization_quality = twin_state.get('synchronization_quality', 1.0)
+            prediction_accuracy = twin_state.get('prediction_accuracy', 1.0)
+            
+            # Apply digital twin validation
+            twin_validated_field = self.hardware_interface.validate_field_configuration(metamaterial_enhanced)
+            
+            # Scale by synchronization and prediction quality
+            validated_field = twin_validated_field * synchronization_quality * prediction_accuracy
+        else:
+            validated_field = self.hardware_interface.validate_field_configuration(metamaterial_enhanced)
         
         return validated_field
     
