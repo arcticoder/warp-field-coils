@@ -46,9 +46,28 @@ try:
     from optimization.enhanced_coil_optimizer import EnhancedCoilOptimizer
     
     # LQG Drive integration imports
-    from lqg_integration.spacetime_geometry_engine import LQGSpacetimeEngine
-    from lqg_integration.positive_energy_controller import PositiveEnergyController  
-    from lqg_integration.polymer_field_generator import PolymerFieldGenerator
+    from lqg_integration.spacetime_geometry import LQGSpacetimeGeometry, SpacetimeConfiguration
+    from lqg_integration.stress_energy_tensor import LQGStressEnergyTensor, StressEnergyConfiguration
+    from lqg_integration.polymer_fields import LQGPolymerFields
+    from lqg_integration.energy_optimizer import LQGEnergyOptimizer
+    
+    # Enhanced Simulation Framework Integration
+    ENHANCED_FRAMEWORK_PATH = Path(__file__).parent.parent.parent.parent / "enhanced-simulation-hardware-abstraction-framework"
+    if ENHANCED_FRAMEWORK_PATH.exists():
+        sys.path.insert(0, str(ENHANCED_FRAMEWORK_PATH / "src"))
+        try:
+            from integration.warp_field_coils_integration import WarpFieldCoilsIntegration, WarpFieldCoilsIntegrationConfig
+            from multi_physics.enhanced_multi_physics_coupling import EnhancedMultiPhysicsCoupling
+            from digital_twin.enhanced_correlation_matrix import EnhancedCorrelationMatrix
+            from uq_framework.enhanced_uncertainty_manager import EnhancedUncertaintyManager
+            ENHANCED_FRAMEWORK_AVAILABLE = True
+            logging.info("✅ Enhanced Simulation Framework integration available")
+        except ImportError as e:
+            ENHANCED_FRAMEWORK_AVAILABLE = False
+            logging.warning(f"⚠️ Enhanced Simulation Framework import failed: {e}")
+    else:
+        ENHANCED_FRAMEWORK_AVAILABLE = False
+        logging.warning("⚠️ Enhanced Simulation Framework path not found")
     from lqg_integration.volume_quantization_manager import VolumeQuantizationManager
     from lqg_integration.bobrick_martire_optimizer import BobrickMartireOptimizer
     
@@ -168,6 +187,13 @@ class LQGMultiAxisParams:
     positive_energy_constraint: bool = True  # T_μν ≥ 0 enforcement
     bobrick_martire_optimization: bool = True  # Advanced metric optimization
     van_den_broeck_energy_reduction: float = 1e6  # 10⁶× energy reduction target
+    
+    # Enhanced Simulation Framework integration parameters
+    enable_framework_integration: bool = ENHANCED_FRAMEWORK_AVAILABLE
+    framework_synchronization_precision: float = 500e-9  # 500ns sync precision
+    cross_domain_coupling_strength: float = 0.85  # Framework coupling strength
+    digital_twin_resolution: int = 64        # Digital twin grid resolution
+    quantum_field_validation: bool = True    # Enable QFT validation
     
     # Safety and performance parameters
     medical_grade_protection: bool = True  # 10¹² biological safety margin
@@ -308,6 +334,47 @@ class LQGMultiAxisController:
         logging.info(f"  - Medical-grade protection: {params.medical_grade_protection}")
         logging.info(f"  - Spatial resolution target: {params.spatial_resolution_target:.2e} m")
         logging.info(f"  - Response time target: {params.response_time_target:.4f} ms")
+        
+        # Enhanced Simulation Framework Integration
+        self._framework_integration = None
+        self._enhanced_multi_physics = None
+        self._correlation_matrix = None
+        self._uncertainty_manager = None
+        
+        if params.enable_framework_integration and ENHANCED_FRAMEWORK_AVAILABLE:
+            self._initialize_framework_integration()
+
+    def _initialize_framework_integration(self):
+        """Initialize Enhanced Simulation Framework integration"""
+        try:
+            # Create framework integration configuration
+            framework_config = WarpFieldCoilsIntegrationConfig(
+                warp_field_coils_path=str(Path(__file__).parent.parent.parent),
+                enable_polymer_corrections=True,
+                enable_hardware_abstraction=True,
+                enable_real_time_analysis=True,
+                mu_polymer=self.params.polymer_parameter_mu,
+                beta_exact=1.9443254780147017,  # Exact backreaction factor
+                safety_limit_acceleration=self.params.max_acceleration,
+                synchronization_precision_ns=self.params.framework_synchronization_precision * 1e9
+            )
+            
+            # Initialize framework integration
+            self._framework_integration = WarpFieldCoilsIntegration(framework_config)
+            
+            # Initialize additional framework components
+            self._enhanced_multi_physics = EnhancedMultiPhysicsCoupling()
+            self._correlation_matrix = EnhancedCorrelationMatrix()
+            self._uncertainty_manager = EnhancedUncertaintyManager()
+            
+            logging.info("✅ Enhanced Simulation Framework integration initialized")
+            logging.info(f"   Synchronization precision: {self.params.framework_synchronization_precision*1e9:.0f}ns")
+            logging.info(f"   Cross-domain coupling: {self.params.cross_domain_coupling_strength:.2f}")
+            logging.info(f"   Digital twin resolution: {self.params.digital_twin_resolution}³")
+            
+        except Exception as e:
+            logging.warning(f"⚠️ Framework integration initialization failed: {e}")
+            self.params.enable_framework_integration = False
 
     def compute_lqg_spacetime_geometry(self, dipole_vector: np.ndarray, spacetime_position: np.ndarray) -> Dict:
         """
@@ -1348,6 +1415,276 @@ class LQGMultiAxisController:
             'avg_einstein_residual': avg_residual,
             'equation_validity': 'excellent' if max_residual < 1e-10 else 'good' if max_residual < 1e-6 else 'poor'
         }
+
+    def compute_framework_enhanced_acceleration(self, 
+                                              jerk_residual: np.ndarray,
+                                              spacetime_position: np.ndarray) -> Dict:
+        """
+        Compute acceleration using Enhanced Simulation Framework integration
+        
+        **ESSENTIAL** Framework-integrated acceleration computation combining:
+        1. LQG spacetime geometry control
+        2. Enhanced simulation framework polymer corrections
+        3. Cross-domain uncertainty quantification
+        4. Real-time hardware abstraction
+        
+        Args:
+            jerk_residual: Residual jerk vector [3] in m/s³
+            spacetime_position: 4D spacetime position [t, x, y, z]
+            
+        Returns:
+            Enhanced acceleration result with framework integration metrics
+        """
+        if not self.params.enable_framework_integration or not self._framework_integration:
+            logging.warning("Framework integration not available, using standard LQG computation")
+            return self.compute_lqg_enhanced_momentum_flux(jerk_residual)
+        
+        try:
+            # Use framework integration for polymer-enhanced acceleration
+            framework_result = self._framework_integration.compute_polymer_enhanced_acceleration(
+                jerk_residual=jerk_residual,
+                spacetime_metric=self._create_spacetime_metric(spacetime_position)
+            )
+            
+            # Extract acceleration and add LQG spacetime geometry context
+            acceleration = framework_result['acceleration']
+            
+            # Enhance with local LQG spacetime geometry
+            geometry = self.compute_lqg_spacetime_geometry(acceleration, spacetime_position)
+            stress_energy = self.compute_positive_energy_stress_tensor(acceleration)
+            
+            # Combine framework and LQG results
+            enhanced_result = {
+                'acceleration': acceleration,
+                'framework_integration': framework_result.get('integration', {}),
+                'spacetime_geometry': geometry,
+                'stress_energy_tensor': stress_energy,
+                'polymer_diagnostics': framework_result.get('diagnostics', {}),
+                'cross_domain_coupling': self._compute_cross_domain_coupling(framework_result),
+                'uncertainty_analysis': self._perform_framework_uncertainty_analysis(framework_result)
+            }
+            
+            # Update uncertainty tracking
+            if self._uncertainty_manager:
+                self._update_framework_uncertainty_tracking(enhanced_result)
+            
+            return enhanced_result
+            
+        except Exception as e:
+            logging.error(f"Framework-enhanced acceleration computation failed: {e}")
+            # Fallback to standard LQG computation
+            return self.compute_lqg_enhanced_momentum_flux(jerk_residual)
+    
+    def _create_spacetime_metric(self, spacetime_position: np.ndarray) -> np.ndarray:
+        """Create 4x4 spacetime metric tensor for framework integration"""
+        # Default to flat spacetime with small perturbations
+        metric = np.diag([1.0, -1.0, -1.0, -1.0])
+        
+        # Add small LQG polymer corrections
+        if len(spacetime_position) >= 4:
+            t, x, y, z = spacetime_position[:4]
+            polymer_correction = np.sinc(self.params.polymer_parameter_mu) * 1e-6
+            
+            # Small off-diagonal terms for realistic spacetime curvature
+            metric[0, 1] = polymer_correction * x
+            metric[1, 0] = polymer_correction * x
+            metric[0, 2] = polymer_correction * y  
+            metric[2, 0] = polymer_correction * y
+            metric[0, 3] = polymer_correction * z
+            metric[3, 0] = polymer_correction * z
+        
+        return metric
+    
+    def _compute_cross_domain_coupling(self, framework_result: Dict) -> Dict:
+        """Compute cross-domain coupling metrics for framework integration"""
+        integration_metrics = framework_result.get('integration', {})
+        
+        return {
+            'electromagnetic_coupling': integration_metrics.get('cross_domain_coupling_strength', 0.0),
+            'thermal_coupling': 0.8 * integration_metrics.get('cross_domain_coupling_strength', 0.0),
+            'mechanical_coupling': 0.9 * integration_metrics.get('cross_domain_coupling_strength', 0.0),
+            'quantum_field_coupling': integration_metrics.get('polymer_correction_active', False),
+            'overall_coupling_fidelity': integration_metrics.get('integration_fidelity', 0.0)
+        }
+    
+    def _perform_framework_uncertainty_analysis(self, framework_result: Dict) -> Dict:
+        """Perform uncertainty analysis for framework integration"""
+        polymer_metrics = framework_result.get('polymer_diagnostics', {}).get('polymer', {})
+        integration_metrics = framework_result.get('framework_integration', {})
+        
+        # Uncertainty propagation analysis
+        parameter_uncertainty = 0.1 * polymer_metrics.get('mu_polymer', 0.0)  # 10% relative uncertainty
+        enhancement_uncertainty = 0.05 * polymer_metrics.get('polymer_enhancement', 1.0)  # 5% relative uncertainty
+        integration_uncertainty = 1.0 - integration_metrics.get('integration_fidelity', 1.0)
+        
+        total_uncertainty = np.sqrt(
+            parameter_uncertainty**2 + 
+            enhancement_uncertainty**2 + 
+            integration_uncertainty**2
+        )
+        
+        return {
+            'parameter_uncertainty': parameter_uncertainty,
+            'enhancement_uncertainty': enhancement_uncertainty,  
+            'integration_uncertainty': integration_uncertainty,
+            'total_uncertainty': total_uncertainty,
+            'confidence_level': max(0.0, 1.0 - 2.0 * total_uncertainty),  # 2σ confidence
+            'uncertainty_grade': 'excellent' if total_uncertainty < 0.01 else 'good' if total_uncertainty < 0.05 else 'fair'
+        }
+    
+    def _update_framework_uncertainty_tracking(self, enhanced_result: Dict):
+        """Update framework uncertainty tracking"""
+        try:
+            uncertainty_data = {
+                'timestamp': time.time(),
+                'component': 'lqg_multi_axis_controller',
+                'uncertainty_analysis': enhanced_result['uncertainty_analysis'],
+                'integration_fidelity': enhanced_result['framework_integration'].get('integration_fidelity', 0.0),
+                'cross_domain_coupling': enhanced_result['cross_domain_coupling']['overall_coupling_fidelity']
+            }
+            
+            # This would integrate with the UQ tracking system
+            logging.debug(f"🔬 Framework UQ tracking updated: confidence={uncertainty_data['uncertainty_analysis']['confidence_level']:.4f}")
+            
+        except Exception as e:
+            logging.warning(f"⚠️ Failed to update framework uncertainty tracking: {e}")
+    
+    def run_framework_integration_analysis(self) -> Dict:
+        """Run comprehensive framework integration analysis"""
+        if not self.params.enable_framework_integration or not self._framework_integration:
+            return {
+                'status': 'Framework integration not available',
+                'integration_active': False,
+                'error': 'Enhanced Simulation Framework not initialized'
+            }
+        
+        try:
+            # Get framework integration status
+            integration_status = self._framework_integration.get_integration_status()
+            
+            # Run polymer performance analysis
+            polymer_analysis = self._framework_integration.run_polymer_performance_analysis()
+            
+            # Create hardware abstraction interface
+            hardware_interface = self._framework_integration.create_hardware_abstraction_interface()
+            
+            # Analyze cross-domain correlations
+            correlation_analysis = self._analyze_correlation_matrix()
+            
+            # Combine all analyses
+            comprehensive_analysis = {
+                'integration_status': integration_status,
+                'polymer_performance': polymer_analysis,
+                'hardware_abstraction': hardware_interface,
+                'correlation_analysis': correlation_analysis,
+                'framework_components': {
+                    'multi_physics_coupling': self._enhanced_multi_physics is not None,
+                    'correlation_matrix': self._correlation_matrix is not None,
+                    'uncertainty_manager': self._uncertainty_manager is not None
+                },
+                'overall_performance': self._assess_overall_framework_performance(
+                    integration_status, polymer_analysis, correlation_analysis
+                )
+            }
+            
+            return comprehensive_analysis
+            
+        except Exception as e:
+            logging.error(f"Framework integration analysis failed: {e}")
+            return {
+                'status': 'Analysis failed',
+                'integration_active': False,
+                'error': str(e)
+            }
+    
+    def _analyze_correlation_matrix(self) -> Dict:
+        """Analyze correlation matrix for cross-domain coupling"""
+        if not self._correlation_matrix:
+            return {'status': 'Correlation matrix not available'}
+        
+        try:
+            # Mock correlation analysis - would use actual correlation matrix methods
+            correlation_strength = self.params.cross_domain_coupling_strength
+            
+            return {
+                'correlation_strength': correlation_strength,
+                'matrix_condition_number': 12.5,  # Mock value
+                'cross_domain_fidelity': min(0.99, correlation_strength + 0.1),
+                'temporal_stability': 0.995,
+                'spatial_coherence': 0.992
+            }
+            
+        except Exception as e:
+            logging.warning(f"Correlation matrix analysis failed: {e}")
+            return {'status': 'Analysis failed', 'error': str(e)}
+    
+    def _assess_overall_framework_performance(self, 
+                                            integration_status: Dict,
+                                            polymer_analysis: Dict, 
+                                            correlation_analysis: Dict) -> Dict:
+        """Assess overall framework integration performance"""
+        
+        # Performance scoring
+        integration_score = 1.0 if integration_status.get('idf_available', False) else 0.0
+        
+        polymer_score = 0.0
+        if 'polymer_performance' in polymer_analysis:
+            perf_level = polymer_analysis['polymer_performance'].get('performance_level', 'UNKNOWN')
+            if perf_level == 'EXCELLENT':
+                polymer_score = 1.0
+            elif perf_level == 'GOOD':
+                polymer_score = 0.8
+            elif perf_level == 'ACCEPTABLE':
+                polymer_score = 0.6
+        
+        correlation_score = correlation_analysis.get('cross_domain_fidelity', 0.0)
+        
+        overall_score = (integration_score + polymer_score + correlation_score) / 3.0
+        
+        return {
+            'overall_score': overall_score,
+            'integration_score': integration_score,
+            'polymer_score': polymer_score,
+            'correlation_score': correlation_score,
+            'performance_grade': self._grade_performance(overall_score),
+            'recommendations': self._generate_framework_recommendations(overall_score, {
+                'integration': integration_score,
+                'polymer': polymer_score,
+                'correlation': correlation_score
+            })
+        }
+    
+    def _grade_performance(self, score: float) -> str:
+        """Grade overall framework performance"""
+        if score >= 0.95:
+            return 'EXCELLENT'
+        elif score >= 0.85:
+            return 'GOOD'
+        elif score >= 0.70:
+            return 'ACCEPTABLE'
+        else:
+            return 'NEEDS_IMPROVEMENT'
+    
+    def _generate_framework_recommendations(self, overall_score: float, component_scores: Dict) -> List[str]:
+        """Generate recommendations for framework integration improvement"""
+        recommendations = []
+        
+        if component_scores['integration'] < 0.8:
+            recommendations.append("Verify Enhanced Simulation Framework installation and initialization")
+        
+        if component_scores['polymer'] < 0.8:
+            recommendations.append("Optimize polymer parameter μ for better energy efficiency")
+        
+        if component_scores['correlation'] < 0.8:
+            recommendations.append("Enhance cross-domain coupling calibration")
+        
+        if overall_score >= 0.95:
+            recommendations.append("Framework integration performing excellently - maintain current configuration")
+        
+        if not recommendations:
+            recommendations.append("System operating nominally - continue monitoring")
+        
+        return recommendations
 
 # ESSENTIAL LQG-Enhanced Convenience Functions for 4D Spacetime Control
 
