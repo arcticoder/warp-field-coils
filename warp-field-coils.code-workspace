@@ -9,12 +9,24 @@
 			"path": "../artificial-gravity-field-generator"
 		},
 		{
+			"name": "casimir-anti-stiction-metasurface-coatings",
+			"path": "../casimir-anti-stiction-metasurface-coatings"
+		},
+		{
 			"name": "casimir-environmental-enclosure-platform",
 			"path": "../casimir-environmental-enclosure-platform"
 		},
 		{
+			"name": "casimir-nanopositioning-platform",
+			"path": "../casimir-nanopositioning-platform"
+		},
+		{
 			"name": "casimir-tunable-permittivity-stacks",
 			"path": "../casimir-tunable-permittivity-stacks"
+		},
+		{
+			"name": "casimir-ultra-smooth-fabrication-platform",
+			"path": "../casimir-ultra-smooth-fabrication-platform"
 		},
 		{
 			"name": "elemental-transmutator",
@@ -33,8 +45,16 @@
 			"path": "../lqg-anec-framework"
 		},
 		{
+			"name": "lqg-cosmological-constant-predictor",
+			"path": "../lqg-cosmological-constant-predictor"
+		},
+		{
 			"name": "lqg-first-principles-fine-structure-constant",
 			"path": "../lqg-first-principles-fine-structure-constant"
+		},
+		{
+			"name": "lqg-first-principles-gravitational-constant",
+			"path": "../lqg-first-principles-gravitational-constant"
 		},
 		{
 			"name": "lqg-ftl-metric-engineering",
@@ -63,6 +83,10 @@
 		{
 			"name": "polymerized-lqg-matter-transporter",
 			"path": "../polymerized-lqg-matter-transporter"
+		},
+		{
+			"name": "polymerized-lqg-replicator-recycler",
+			"path": "../polymerized-lqg-replicator-recycler"
 		},
 		{
 			"name": "su2-3nj-closedform",
@@ -99,6 +123,10 @@
 		{
 			"name": "warp-bubble-qft",
 			"path": "../warp-bubble-qft"
+		},
+		{
+			"name": "warp-spacetime-stability-controller",
+			"path": "../warp-spacetime-stability-controller"
 		}
 	],
 	"settings": {
