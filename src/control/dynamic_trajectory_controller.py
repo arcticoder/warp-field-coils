@@ -41,10 +41,27 @@ except ImportError:
 
 # Cross-repository integrations
 try:
-    # Bobrick-Martire geometry from lqg-positive-matter-assembler
+    # Enhanced Simulation Hardware Abstraction Framework integration
     import sys
     import os
-    sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'lqg-positive-matter-assembler', 'src'))
+    sim_framework_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'enhanced-simulation-hardware-abstraction-framework')
+    sys.path.append(sim_framework_path)
+    from quantum_field_manipulator import (
+        QuantumFieldManipulator,
+        QuantumFieldConfig,
+        EnergyMomentumTensorController,
+        FieldValidationSystem,
+        HBAR, C_LIGHT, G_NEWTON
+    )
+    ENHANCED_SIM_AVAILABLE = True
+except ImportError:
+    ENHANCED_SIM_AVAILABLE = False
+    logging.warning("Enhanced Simulation Framework not available - using fallback implementations")
+
+try:
+    # Bobrick-Martire geometry from lqg-positive-matter-assembler
+    bm_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'lqg-positive-matter-assembler', 'src')
+    sys.path.append(bm_path)
     from core.bobrick_martire_geometry import (
         BobrickMartireConfig,
         BobrickMartireShapeOptimizer,
@@ -178,6 +195,27 @@ class LQGDynamicTrajectoryController:
         else:
             self.geometry_controller = None
             self.shape_optimizer = None
+            
+        # Initialize Enhanced Simulation Hardware Abstraction Framework
+        if ENHANCED_SIM_AVAILABLE:
+            # Configure quantum field manipulator for trajectory control
+            field_config = QuantumFieldConfig(
+                field_dimension=3,
+                field_resolution=64,  # Optimized for real-time control
+                coherence_preservation_level=0.99,
+                quantum_enhancement_factor=1e10,
+                safety_containment_level=0.999
+            )
+            self.quantum_field_manipulator = QuantumFieldManipulator(field_config)
+            self.energy_momentum_controller = EnergyMomentumTensorController(field_config)
+            self.field_validator = FieldValidationSystem(field_config)
+            logging.info("✓ Enhanced Simulation Framework integration active")
+            logging.info(f"  - Quantum enhancement: {field_config.quantum_enhancement_factor:.1e}×")
+            logging.info(f"  - Field resolution: {field_config.field_resolution}³ grid")
+        else:
+            self.quantum_field_manipulator = None
+            self.energy_momentum_controller = None
+            self.field_validator = None
             logging.warning("⚠️ Bobrick-Martire controller unavailable - using mock")
         
         # Control system parameters
@@ -693,6 +731,30 @@ class LQGDynamicTrajectoryController:
                 lqg_energy = kinetic_energy / (energy_efficiency + 1e-12)
                 total_energy += lqg_energy * time_step
                 total_energies[i] = total_energy
+                
+                # Enhanced Simulation Framework integration for real-time validation
+                if ENHANCED_SIM_AVAILABLE and self.quantum_field_manipulator:
+                    # Real-time quantum field validation
+                    field_state = self.quantum_field_manipulator.get_current_field_state()
+                    
+                    # Energy-momentum tensor validation
+                    T_mu_nu = self.energy_momentum_controller.compute_stress_energy_tensor(
+                        velocity=target_velocity,
+                        acceleration=acceleration,
+                        field_amplitude=amplitude
+                    )
+                    
+                    # Validate positive energy constraint T_μν ≥ 0
+                    energy_constraint_satisfied = self.field_validator.validate_positive_energy_constraint(T_mu_nu)
+                    
+                    if not energy_constraint_satisfied:
+                        logging.warning(f"⚠️ Positive energy constraint violation at t={t:.3f}s")
+                        # Apply quantum correction
+                        corrected_amplitude = self.quantum_field_manipulator.apply_positive_energy_correction(
+                            amplitude, T_mu_nu
+                        )
+                        amplitudes[i] = corrected_amplitude
+                        logging.info(f"✓ Applied quantum correction: {amplitude:.3e} → {corrected_amplitude:.3e}")
                 
                 # Safety monitoring
                 safety_status = self._monitor_trajectory_safety(
