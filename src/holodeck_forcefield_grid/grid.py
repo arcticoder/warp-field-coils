@@ -165,6 +165,13 @@ class GridParams:
     digital_twin_enabled: bool = True       # Enable real-time digital twin
     synchronization_latency: float = 1e-3   # Target <1ms synchronization
     prediction_horizon: float = 0.1         # 100ms prediction horizon
+    
+    # Additional holodeck parameters
+    holodeck_mode: bool = True              # Enable holodeck-specific features
+    room_scale_bounds: Tuple[float, float, float] = (4.0, 4.0, 3.0)  # Room scale bounds
+    enhanced_materials: List[str] = field(default_factory=lambda: [
+        'quantum_vacuum', 'spacetime_fabric', 'polymer_field', 'bio_safe_force_field'
+    ])
 
 class LQGEnhancedForceFieldGrid:
     """
@@ -652,10 +659,10 @@ class LQGEnhancedForceFieldGrid:
         if create_new_zone:
             # Determine material type based on object tracking history
             material_type = "soft"  # Default for human interaction
-            quantum_enhancement = 1.5  # Enhanced responsiveness
+            quantum_enhancement_level = 1.5  # Enhanced responsiveness
             
             # Add LQG-enhanced interaction zone
-            self.add_lqg_enhanced_interaction_zone(position, zone_radius, material_type, quantum_enhancement)
+            self.add_lqg_enhanced_interaction_zone(position, zone_radius, material_type, quantum_enhancement_level)
 
     def update_quantum_coherence_system(self, environmental_factors: Dict = None):
         """
@@ -854,7 +861,7 @@ class LQGEnhancedForceFieldGrid:
         
         # Test basic force computation
         test_point = np.array([0.0, 0.0, 1.0])
-        test_force = self.compute_total_force(test_point)
+        test_force, test_metrics = self.compute_total_lqg_enhanced_force(test_point)
         
         # Test node activation
         active_nodes = sum(1 for node in self.nodes if node.active)
@@ -883,7 +890,9 @@ class LQGEnhancedForceFieldGrid:
             'power_limit': self.params.power_limit,
             
             'test_force_magnitude': np.linalg.norm(test_force),
-            'emergency_systems': 'ACTIVE' if not self.emergency_stop else 'TRIGGERED'
+            'emergency_systems': 'ACTIVE' if not self.emergency_stop else 'TRIGGERED',
+            'lqg_enhancement_active': test_metrics.get('lqg_nodes_active', 0) > 0,
+            'energy_reduction_factor': test_metrics.get('energy_reduction_factor', 1.0)
         }
         
         # Overall health
@@ -1005,7 +1014,7 @@ class LQGEnhancedForceFieldGrid:
                                  else ('improving' if np.polyfit(range(len(self.coherence_history[-10:])), 
                                                                self.coherence_history[-10:], 1)[0] > 0 
                                       else 'declining'),
-                'polymer_enhancement_factor': self.enhancement_params.polymer_enhancement_factor,
+                'polymer_scale_mu': self.params.lqg_enhancement.polymer_scale_mu,
                 'total_enhancement_factor': self.total_energy_reduction
             },
             'node_statistics': {
@@ -1197,17 +1206,17 @@ if __name__ == "__main__":
     
     # Virtual object 1: Floating crystal (rigid interaction)
     crystal_pos = np.array([0.8, 0.8, 1.5])
-    grid.add_lqg_enhanced_interaction_zone(crystal_pos, 0.12, "rigid", quantum_enhancement=2.0)
+    grid.add_lqg_enhanced_interaction_zone(crystal_pos, 0.12, "rigid", quantum_enhancement_level=2.0)
     print(f"Added virtual crystal at {crystal_pos} with rigid physics")
     
     # Virtual object 2: Soft holographic surface (soft interaction)  
     surface_pos = np.array([-0.5, 1.0, 1.0])
-    grid.add_lqg_enhanced_interaction_zone(surface_pos, 0.20, "soft", quantum_enhancement=1.5)
+    grid.add_lqg_enhanced_interaction_zone(surface_pos, 0.20, "soft", quantum_enhancement_level=1.5)
     print(f"Added holographic surface at {surface_pos} with soft physics")
     
     # Virtual object 3: Water simulation (fluid interaction)
     water_pos = np.array([0.0, -0.8, 0.8])
-    grid.add_lqg_enhanced_interaction_zone(water_pos, 0.25, "fluid", quantum_enhancement=1.8)
+    grid.add_lqg_enhanced_interaction_zone(water_pos, 0.25, "liquid", quantum_enhancement_level=1.8)
     print(f"Added water simulation at {water_pos} with fluid physics")
     
     print(f"Total Interaction Zones: {len(grid.interaction_zones)}")
