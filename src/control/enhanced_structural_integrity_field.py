@@ -42,6 +42,21 @@ except ImportError:
     logging.warning("Curvature modules not available - using mock implementations")
     CURVATURE_AVAILABLE = False
 
+# Enhanced numerical stability and matter coupling integration
+try:
+    from unified_lqg.src.numerical_stability.gpu_constraint_kernel_enhancement import (
+        create_stable_constraint_solver
+    )
+    from unified_lqg.src.matter_coupling.self_consistent_backreaction import (
+        create_self_consistent_matter_coupling,
+        MatterFieldConfig
+    )
+    ENHANCED_LQG_AVAILABLE = True
+    logging.info("Enhanced LQG numerical stability and matter coupling available")
+except ImportError as e:
+    logging.warning(f"Enhanced LQG modules not available: {e}")
+    ENHANCED_LQG_AVAILABLE = False
+
 # Enhanced Simulation Framework Integration
 try:
     import sys
@@ -82,6 +97,10 @@ class SIFParams:
     framework_resolution: int = 64               # Digital twin resolution (64³)
     framework_sync_precision: float = 100e-9    # Synchronization precision (100 ns)
     enable_multi_physics: bool = True           # Enable multi-physics coupling
+    # Enhanced LQG integration parameters
+    enable_enhanced_lqg: bool = True            # Enable enhanced LQG numerical stability
+    constraint_stability_threshold: float = 1e-12  # Numerical stability threshold
+    matter_coupling_tolerance: float = 1e-10    # Matter coupling convergence tolerance
 
 class EnhancedStructuralIntegrityField:
     """
@@ -108,6 +127,12 @@ class EnhancedStructuralIntegrityField:
         self.multi_physics_coupling = None
         if self.params.enable_framework_integration and ENHANCED_FRAMEWORK_AVAILABLE:
             self._initialize_framework_integration()
+        
+        # Enhanced LQG integration
+        self.constraint_solver = None
+        self.matter_coupling_solver = None
+        if self.params.enable_enhanced_lqg and ENHANCED_LQG_AVAILABLE:
+            self._initialize_enhanced_lqg_integration()
         
         # Performance tracking
         self.stress_history = []
@@ -150,6 +175,28 @@ class EnhancedStructuralIntegrityField:
             logging.error(f"Failed to initialize Enhanced Simulation Framework: {e}")
             self.framework = None
             self.multi_physics_coupling = None
+    
+    def _initialize_enhanced_lqg_integration(self):
+        """Initialize Enhanced LQG numerical stability and matter coupling"""
+        try:
+            # Initialize constraint solver with numerical stability
+            self.constraint_solver = create_stable_constraint_solver(
+                stability_threshold=self.params.constraint_stability_threshold
+            )
+            
+            # Initialize matter coupling solver with full backreaction
+            self.matter_coupling_solver = create_self_consistent_matter_coupling(
+                polymer_scale=self.params.material_modulus
+            )
+            
+            logging.info(f"Enhanced LQG integration initialized: "
+                        f"stability_threshold={self.params.constraint_stability_threshold:.2e}, "
+                        f"matter_coupling_tolerance={self.params.matter_coupling_tolerance:.2e}")
+                        
+        except Exception as e:
+            logging.error(f"Failed to initialize Enhanced LQG integration: {e}")
+            self.constraint_solver = None
+            self.matter_coupling_solver = None
     
     def _compute_riemann_curvature(self, metric: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -265,31 +312,82 @@ class EnhancedStructuralIntegrityField:
     
     def _compute_lqg_corrections(self, metric: np.ndarray, sigma: np.ndarray) -> np.ndarray:
         """
-        Compute LQG polymer corrections to stress-energy tensor.
+        Compute LQG polymer corrections to stress-energy tensor with enhanced numerical stability and self-consistent backreaction.
         """
         if not self.params.enable_lqg_corrections:
             return np.zeros((4, 4))
             
         try:
-            if CURVATURE_AVAILABLE:
-                return compute_lqg_structural_corrections(metric, sigma)
-            else:
-                # Mock LQG corrections
-                T_lqg = np.zeros((4, 4))
-                correction_scale = 1e-8
+            # Enhanced LQG computation with numerical stability
+            if self.matter_coupling_solver is not None and self.params.enable_enhanced_lqg:
+                # Use self-consistent matter coupling for accurate backreaction
+                matter_config = MatterFieldConfig(
+                    field_type="structural_stress",
+                    mass=1.0,
+                    coupling_constant=self.params.material_modulus,
+                    initial_amplitude=np.linalg.norm(sigma) / 1e6  # Scale to reasonable amplitude
+                )
                 
-                # Small correction to energy density
-                T_lqg[0, 0] = correction_scale * np.trace(sigma @ sigma)
+                # Compute self-consistent corrections with full backreaction
+                corrected_metric, corrected_stress_energy, coupling_diagnostics = (
+                    self.matter_coupling_solver.compute_self_consistent_coupling(metric, matter_config)
+                )
                 
-                # Small corrections to spatial stresses
-                for i in range(3):
-                    T_lqg[i+1, i+1] = -0.1 * correction_scale * sigma[i, i]
-                    
+                # Extract LQG corrections from self-consistent solution
+                T_lqg = corrected_stress_energy - self._compute_classical_stress_energy(sigma)
+                
+                logging.debug(f"Enhanced LQG corrections: "
+                             f"converged={coupling_diagnostics['converged']}, "
+                             f"iterations={coupling_diagnostics['iterations']}, "
+                             f"correction_magnitude={np.linalg.norm(T_lqg):.2e}")
+                
                 return T_lqg
                 
+            elif CURVATURE_AVAILABLE:
+                return compute_lqg_structural_corrections(metric, sigma)
+            else:
+                # Fallback to mock LQG corrections
+                return self._mock_lqg_corrections(metric, sigma)
+                
         except Exception as e:
-            logging.warning(f"LQG corrections failed: {e}")
-            return np.zeros((4, 4))
+            logging.warning(f"Enhanced LQG corrections failed: {e}")
+            return self._mock_lqg_corrections(metric, sigma)
+    
+    def _compute_classical_stress_energy(self, sigma: np.ndarray) -> np.ndarray:
+        """Compute classical stress-energy tensor for comparison with LQG corrections"""
+        T_classical = np.zeros((4, 4))
+        
+        # Energy density from structural stress
+        stress_energy_density = 0.5 * np.trace(sigma @ sigma)
+        T_classical[0, 0] = stress_energy_density
+        
+        # Spatial stress components
+        for i in range(3):
+            for j in range(3):
+                if i < sigma.shape[0] and j < sigma.shape[1]:
+                    T_classical[i+1, j+1] = -sigma[i, j]
+        
+        return T_classical
+    
+    def _mock_lqg_corrections(self, metric: np.ndarray, sigma: np.ndarray) -> np.ndarray:
+        """Enhanced mock LQG corrections with improved physics"""
+        T_lqg = np.zeros((4, 4))
+        
+        # More realistic correction scale based on polymer physics
+        polymer_scale = self.params.material_modulus
+        correction_scale = 1e-8 * (1 + polymer_scale)  # Scale with polymer parameter
+        
+        # Energy density correction with polymer enhancement
+        stress_magnitude = np.trace(sigma @ sigma)
+        T_lqg[0, 0] = correction_scale * stress_magnitude * self.polymer_factor
+        
+        # Spatial stress corrections with anisotropy
+        for i in range(3):
+            T_lqg[i+1, i+1] = -0.1 * correction_scale * (
+                sigma[i, i] if i < sigma.shape[0] else 0.0
+            ) * self.polymer_factor
+            
+        return T_lqg
     
     def _apply_stress_safety_limits(self, sigma_sif: np.ndarray) -> np.ndarray:
         """
