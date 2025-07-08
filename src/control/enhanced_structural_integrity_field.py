@@ -26,6 +26,7 @@ def polymer_enhancement_factor(mu):
 
 import numpy as np
 import logging
+import time
 from dataclasses import dataclass
 from typing import Optional, Tuple, Dict, Any
 
@@ -41,6 +42,30 @@ except ImportError:
     logging.warning("Curvature modules not available - using mock implementations")
     CURVATURE_AVAILABLE = False
 
+# Enhanced Simulation Framework Integration
+try:
+    import sys
+    import os
+    # Add enhanced-simulation-hardware-abstraction-framework to path
+    framework_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'enhanced-simulation-hardware-abstraction-framework')
+    if os.path.exists(framework_path):
+        sys.path.insert(0, framework_path)
+    
+    from src.enhanced_simulation_framework import (
+        EnhancedSimulationFramework,
+        SimulationConfig,
+        create_enhanced_simulation_framework
+    )
+    from src.multi_physics.enhanced_multi_physics_coupling import (
+        EnhancedMultiPhysicsCoupling,
+        PhysicsDomain
+    )
+    ENHANCED_FRAMEWORK_AVAILABLE = True
+    logging.info("Enhanced Simulation Framework integration available")
+except ImportError as e:
+    logging.warning(f"Enhanced Simulation Framework not available: {e}")
+    ENHANCED_FRAMEWORK_AVAILABLE = False
+
 @dataclass
 class SIFParams:
     """Parameters for Enhanced Structural Integrity Field"""
@@ -52,30 +77,79 @@ class SIFParams:
     enable_lqg_corrections: bool = True   # Enable LQG polymer corrections
     enable_weyl_coupling: bool = True     # Enable Weyl tensor coupling
     enable_ricci_coupling: bool = True    # Enable Ricci tensor coupling
+    # Enhanced Simulation Framework integration parameters
+    enable_framework_integration: bool = True    # Enable Enhanced Simulation Framework
+    framework_resolution: int = 64               # Digital twin resolution (64³)
+    framework_sync_precision: float = 100e-9    # Synchronization precision (100 ns)
+    enable_multi_physics: bool = True           # Enable multi-physics coupling
 
 class EnhancedStructuralIntegrityField:
     """
-    Enhanced SIF with full curvature coupling and LQG corrections.
+    Enhanced SIF with full curvature coupling, LQG corrections, and Enhanced Simulation Framework integration.
     
     Features:
     - Complete Weyl tensor stress computation
     - Ricci tensor coupling for additional protection
-    - LQG polymer corrections for quantum effects
+    - LQG polymer corrections for quantum effects (sinc(πμ) enhancement)
+    - Sub-classical energy optimization (242M× reduction)
+    - Enhanced Simulation Framework integration with 64³ digital twin resolution
+    - Multi-physics coupling with electromagnetic, thermal, and mechanical domains
     - Medical-grade stress limits (1 μN force equivalent)
-    - Real-time structural health monitoring
+    - Real-time structural health monitoring with framework synchronization
     """
     
     def __init__(self, params: SIFParams):
         self.params = params
         # LQG polymer enhancement factor (sinc(πμ))
         self.polymer_factor = polymer_enhancement_factor(self.params.material_modulus)
+        
+        # Enhanced Simulation Framework integration
+        self.framework = None
+        self.multi_physics_coupling = None
+        if self.params.enable_framework_integration and ENHANCED_FRAMEWORK_AVAILABLE:
+            self._initialize_framework_integration()
+        
         # Performance tracking
         self.stress_history = []
         self.safety_violations = 0
         self.total_computations = 0
+        self.framework_sync_errors = 0
+        
         logging.info(f"Enhanced SIF initialized: K_SIF={params.sif_gain:.2e}, "
                     f"stress_limit={params.max_stress_limit:.2e} N/m², "
-                    f"LQG polymer factor={self.polymer_factor:.4f}")
+                    f"LQG polymer factor={self.polymer_factor:.4f}, "
+                    f"Framework integration: {self.params.enable_framework_integration}")
+    
+    def _initialize_framework_integration(self):
+        """Initialize Enhanced Simulation Framework integration"""
+        try:
+            # Create framework configuration for SIF
+            config = SimulationConfig(
+                resolution=self.params.framework_resolution,
+                sync_precision=self.params.framework_sync_precision,
+                enable_multi_physics=self.params.enable_multi_physics,
+                domains=[PhysicsDomain.STRUCTURAL, PhysicsDomain.ELECTROMAGNETIC, PhysicsDomain.THERMAL]
+            )
+            
+            # Initialize enhanced simulation framework
+            self.framework = create_enhanced_simulation_framework(config)
+            
+            # Initialize multi-physics coupling for structural analysis
+            if self.params.enable_multi_physics:
+                self.multi_physics_coupling = EnhancedMultiPhysicsCoupling(
+                    primary_domain=PhysicsDomain.STRUCTURAL,
+                    coupled_domains=[PhysicsDomain.ELECTROMAGNETIC, PhysicsDomain.THERMAL],
+                    resolution=self.params.framework_resolution
+                )
+            
+            logging.info(f"Enhanced Simulation Framework initialized: "
+                        f"resolution={self.params.framework_resolution}³, "
+                        f"sync_precision={self.params.framework_sync_precision*1e9:.0f}ns")
+                        
+        except Exception as e:
+            logging.error(f"Failed to initialize Enhanced Simulation Framework: {e}")
+            self.framework = None
+            self.multi_physics_coupling = None
     
     def _compute_riemann_curvature(self, metric: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -236,7 +310,8 @@ class EnhancedStructuralIntegrityField:
     
     def compute_compensation(self, metric: np.ndarray) -> Dict[str, Any]:
         """
-        Compute structural integrity field compensation with LQG polymer corrections and sub-classical energy optimization (242M× reduction).
+        Compute structural integrity field compensation with LQG polymer corrections, sub-classical energy optimization (242M× reduction), 
+        and Enhanced Simulation Framework integration.
         
         Args:
             metric: Spacetime metric tensor [4×4]
@@ -245,38 +320,68 @@ class EnhancedStructuralIntegrityField:
             - stress_compensation: SIF stress tensor [3×3]
             - components: Breakdown of stress components
             - diagnostics: Performance and safety information
+            - framework_data: Enhanced Simulation Framework integration results
         """
         self.total_computations += 1
+        start_time = time.time()
+        
         # 1. Compute curvature tensors
         riemann, ricci, weyl = self._compute_riemann_curvature(metric)
+        
         # 2. Base Weyl stress
         sigma_base = self._compute_base_weyl_stress(weyl)
-        # 3. Apply LQG polymer enhancement (sinc(πμ))
-        sigma_polymer = sigma_base * self.polymer_factor
-        # 4. Sub-classical energy optimization (divide by 242M)
+        
+        # 3. Enhanced Simulation Framework integration
+        framework_enhancement = 1.0
+        framework_data = {}
+        if self.framework is not None:
+            try:
+                # Synchronize with Enhanced Simulation Framework
+                framework_data = self._compute_framework_enhancement(metric, sigma_base)
+                framework_enhancement = framework_data.get('enhancement_factor', 1.0)
+            except Exception as e:
+                logging.warning(f"Framework integration failed: {e}")
+                self.framework_sync_errors += 1
+        
+        # 4. Apply LQG polymer enhancement (sinc(πμ))
+        sigma_polymer = sigma_base * self.polymer_factor * framework_enhancement
+        
+        # 5. Sub-classical energy optimization (divide by 242M)
         sigma_subclassical = sigma_polymer / TOTAL_SUB_CLASSICAL_ENHANCEMENT
-        # 5. Full structural stress-energy tensor
+        
+        # 6. Full structural stress-energy tensor
         T_struct = self._compute_structural_stress_tensor(sigma_subclassical, ricci, weyl)
-        # 6. LQG corrections
+        
+        # 7. LQG corrections
         T_lqg = self._compute_lqg_corrections(metric, sigma_subclassical)
         T_total = T_struct + T_lqg
-        # 7. Compensation field
+        
+        # 8. Compensation field
         sigma_sif_raw = -self.params.sif_gain * sigma_subclassical
-        # 8. Apply safety limits
+        
+        # 9. Apply safety limits
         sigma_sif = self._apply_stress_safety_limits(sigma_sif_raw)
+        
+        computation_time = time.time() - start_time
+        
         # Performance tracking
         performance = {
             'weyl_stress_magnitude': np.linalg.norm(sigma_base),
             'polymer_factor': self.polymer_factor,
+            'framework_enhancement': framework_enhancement,
             'subclassical_stress_magnitude': np.linalg.norm(sigma_subclassical),
             'compensation_magnitude': np.linalg.norm(sigma_sif),
             'safety_limited': np.linalg.norm(sigma_sif_raw) > self.params.max_stress_limit,
-            'effectiveness': min(1.0, np.linalg.norm(sigma_sif) / max(np.linalg.norm(sigma_base), 1e-12))
+            'effectiveness': min(1.0, np.linalg.norm(sigma_sif) / max(np.linalg.norm(sigma_base), 1e-12)),
+            'computation_time_ms': computation_time * 1000,
+            'framework_sync_errors': self.framework_sync_errors
         }
         self.stress_history.append(performance)
+        
         # Keep only recent history
         if len(self.stress_history) > 1000:
             self.stress_history = self.stress_history[-1000:]
+        
         return {
             'stress_compensation': sigma_sif,
             'components': {
@@ -297,8 +402,61 @@ class EnhancedStructuralIntegrityField:
                 'performance': performance,
                 'safety_violations': self.safety_violations,
                 'total_computations': self.total_computations
-            }
+            },
+            'framework_data': framework_data
         }
+    
+    def _compute_framework_enhancement(self, metric: np.ndarray, stress_tensor: np.ndarray) -> Dict[str, Any]:
+        """
+        Compute Enhanced Simulation Framework enhancement for structural analysis.
+        
+        Returns framework integration data including enhancement factors and synchronization metrics.
+        """
+        if self.framework is None:
+            return {}
+        
+        try:
+            # Prepare structural field data for framework
+            field_data = {
+                'stress_tensor': stress_tensor,
+                'metric_tensor': metric,
+                'timestamp': time.time(),
+                'domain': 'structural'
+            }
+            
+            # Run enhanced simulation with multi-physics coupling
+            enhancement_result = self.framework.process_field_data(field_data)
+            
+            # Extract enhancement factors
+            enhancement_factor = enhancement_result.get('amplification_factor', 1.0)
+            
+            # Multi-physics coupling enhancement
+            coupling_enhancement = 1.0
+            if self.multi_physics_coupling is not None:
+                coupling_result = self.multi_physics_coupling.compute_coupling(
+                    primary_field=stress_tensor,
+                    secondary_fields={'electromagnetic': np.zeros_like(stress_tensor)},
+                    coupling_strength=0.1
+                )
+                coupling_enhancement = coupling_result.get('structural_enhancement', 1.0)
+            
+            # Combined enhancement factor with safety limits
+            total_enhancement = min(enhancement_factor * coupling_enhancement, 10.0)  # Cap at 10× for safety
+            
+            return {
+                'enhancement_factor': total_enhancement,
+                'framework_amplification': enhancement_factor,
+                'coupling_enhancement': coupling_enhancement,
+                'resolution': self.params.framework_resolution,
+                'sync_precision_ns': self.params.framework_sync_precision * 1e9,
+                'processing_time_ms': enhancement_result.get('processing_time', 0) * 1000,
+                'correlation_matrix': enhancement_result.get('correlation_matrix', np.eye(3)),
+                'multi_physics_active': self.multi_physics_coupling is not None
+            }
+            
+        except Exception as e:
+            logging.error(f"Framework enhancement computation failed: {e}")
+            return {'enhancement_factor': 1.0, 'error': str(e)}
     
     def get_performance_metrics(self) -> Dict[str, float]:
         """Get performance statistics"""
@@ -383,3 +541,37 @@ if not CURVATURE_AVAILABLE:
     ricci_tensor_from_riemann = mock_ricci_tensor_from_riemann
     weyl_tensor = mock_weyl_tensor
     compute_lqg_structural_corrections = mock_compute_lqg_structural_corrections
+
+# Mock Enhanced Simulation Framework if not available
+if not ENHANCED_FRAMEWORK_AVAILABLE:
+    class MockSimulationConfig:
+        def __init__(self, **kwargs):
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+    
+    class MockEnhancedSimulationFramework:
+        def process_field_data(self, field_data):
+            return {
+                'amplification_factor': 1.0,
+                'processing_time': 0.001,
+                'correlation_matrix': np.eye(3)
+            }
+    
+    class MockMultiPhysicsCoupling:
+        def __init__(self, **kwargs):
+            pass
+        def compute_coupling(self, **kwargs):
+            return {'structural_enhancement': 1.0}
+    
+    class MockPhysicsDomain:
+        STRUCTURAL = 'structural'
+        ELECTROMAGNETIC = 'electromagnetic'
+        THERMAL = 'thermal'
+    
+    # Create mock functions
+    def create_enhanced_simulation_framework(config):
+        return MockEnhancedSimulationFramework()
+    
+    SimulationConfig = MockSimulationConfig
+    EnhancedMultiPhysicsCoupling = MockMultiPhysicsCoupling
+    PhysicsDomain = MockPhysicsDomain
