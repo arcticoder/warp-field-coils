@@ -65,7 +65,7 @@ All repositories are part of the [arcticoder](https://github.com/arcticoder) eco
 2. **✅ Bobrick-Martire Geometry Integration** (Production Ready)
    - **Traversable Spacetime**: ds² = -dt² + f(r)[dr² + r²dΩ²] implementation
 
-#### **🚀 STEP 9: WARP-PULSE TOMOGRAPHIC SCANNER - IMPLEMENTATION READY**
+#### **🚀 STEP 9: WARP-PULSE TOMOGRAPHIC SCANNER - IMPLEMENTATION PLAN**
 
 **Current Implementation Target**: **Warp-Pulse Tomographic Scanner** 
 - **Preparation Status**: ✅ **DEPLOYMENT READY** (95.6% overall readiness achieved)
@@ -78,11 +78,36 @@ All repositories are part of the [arcticoder](https://github.com/arcticoder) eco
 - **Repository Integration**: All required repositories integrated and validated
 - **Implementation Files**: Core tomographic scanner ready at `src/tomographic_scanner.py`
 
+**Implementation Roadmap for Warp-Pulse Tomographic Scanner**:
+
+**Phase 1: Core Tomographic Engine (Weeks 1-2)**
+- Enhance existing `tomographic_scanner.py` with LQG probe generation
+- Implement positive-energy constraint enforcement for biological scanning
+- Integrate LQG polymer corrections for enhanced precision
+
+**Phase 2: Medical Imaging Integration (Weeks 3-4)**
+- Medical-grade tomographic protocols with biological safety validation
+- Integration with medical tractor array for combined imaging/manipulation
+- Real-time safety monitoring with emergency protocols
+
+**Phase 3: Advanced Scanning Capabilities (Weeks 5-6)**
+- Materials analysis scanning for warp field characterization
+- Multi-modal scanning combining spacetime probes with conventional imaging
+- Enhanced visualization and analysis frameworks
+
 **Enhanced UQ Resolution Framework**:
 - **Statistical Coverage**: 92.6% validation at nanometer scale
 - **Control Loop Interactions**: 89.4% multi-rate stability
 - **Robustness Testing**: 93.4% parameter variation resilience
 - **Predictive Control**: 97.3% horizon optimization
+
+**Repository Dependencies for Enhanced Implementation**:
+- **Core LQG Framework**: `unified-lqg`, `lqg-polymer-field-generator`, `lqg-positive-matter-assembler`
+- **Simulation & Control**: `enhanced-simulation-hardware-abstraction-framework`, `warp-spacetime-stability-controller`
+- **Precision Enhancement**: `lqg-volume-quantization-controller`, `casimir-nanopositioning-platform`
+- **Medical Integration**: `artificial-gravity-field-generator`, `polymer-fusion-framework`
+- **Advanced Systems**: `polymerized-lqg-matter-transporter`, `polymerized-lqg-replicator-recycler`
+- **Energy Ecosystem**: `energy`, `lqg-ftl-metric-engineering`
    - **Positive Energy Constraint**: T_μν ≥ 0 enforcement eliminating exotic matter
    - **LQG Corrections**: G_μν^LQG = G_μν + sinc(πμ) × ΔG_μν^polymer
    - **Spacetime Modulation**: Direct message encoding into curvature perturbations  

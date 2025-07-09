@@ -4,10 +4,7 @@
 			"name": "warp-field-coils (main)",
 			"path": "."
 		},
-		{
-			"name": "artificial-gravity-field-generator",
-			"path": "../artificial-gravity-field-generator"
-		},
+		// --- All folders below are alphabetized, with no duplicates ---
 		{
 			"name": "casimir-anti-stiction-metasurface-coatings",
 			"path": "../casimir-anti-stiction-metasurface-coatings"
