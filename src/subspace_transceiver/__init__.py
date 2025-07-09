@@ -1,7 +1,17 @@
 """
-Subspace Transceiver Module
+LQG-Enhanced Subspace Transceiver Module
 """
 
-from .transceiver import SubspaceTransceiver, SubspaceParams, TransmissionParams
+from .transceiver import (
+    LQGSubspaceTransceiver, 
+    LQGSubspaceParams, 
+    LQGTransmissionParams,
+    SubspaceTransceiver,  # Legacy compatibility
+)
 
-__all__ = ['SubspaceTransceiver', 'SubspaceParams', 'TransmissionParams']
+__all__ = [
+    'LQGSubspaceTransceiver', 
+    'LQGSubspaceParams', 
+    'LQGTransmissionParams',
+    'SubspaceTransceiver'  # Legacy compatibility
+]
