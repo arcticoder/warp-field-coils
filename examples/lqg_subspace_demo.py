@@ -13,6 +13,8 @@ Features demonstrated:
 - Ultra-high fidelity quantum error correction
 - Positive energy constraint enforcement
 - Biological safety compliance
+- Enhanced Simulation Framework integration
+- Multi-physics field coupling enhancements
 """
 
 import sys
@@ -89,7 +91,9 @@ def main():
         'quantum_error_correction',
         'spacetime_modulation',
         'biological_safety_systems',
-        'causality_preservation'
+        'causality_preservation',
+        'framework_active',
+        'framework_available'
     ]
     
     for system in critical_systems:
@@ -142,6 +146,19 @@ def main():
     print(f"✅ Safety Margin: {safety_margin:.1f}× WHO limits")
     print(f"✅ Positive Energy Constraint: T_μν ≥ 0 enforced")
     print(f"✅ Emergency Response: {channel_status['emergency_response_ms']} ms")
+    
+    # Display Enhanced Simulation Framework status
+    framework_active = channel_status.get('framework_active', False)
+    framework_available = channel_status.get('framework_available', False)
+    print(f"🔬 Enhanced Simulation Framework: {'ACTIVE' if framework_active else 'AVAILABLE' if framework_available else 'UNAVAILABLE'}")
+    
+    if framework_active:
+        enhancement_factor = channel_status.get('framework_enhancement_factor', 1.0)
+        field_resolution = channel_status.get('framework_field_resolution', 0)
+        multi_physics = channel_status.get('framework_multi_physics_coupling', False)
+        print(f"   📈 Enhancement Factor: {enhancement_factor:.3f}")
+        print(f"   📐 Field Resolution: {field_resolution}³")
+        print(f"   🔗 Multi-Physics Coupling: {'ENABLED' if multi_physics else 'DISABLED'}")
     
     # Test 5: Reception capabilities
     print("\n📻 Test 5: FTL Signal Reception")
