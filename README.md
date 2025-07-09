@@ -1,5 +1,15 @@
 # Warp Field Coils - LQG FTL Metric Engineering Support Systems
 
+## Related Repositories
+
+- [energy](https://github.com/arcticoder/energy): Central meta-repo for all energy, quantum, and warp field research. This warp field system is a core component of the energy ecosystem.
+- [lqg-ftl-metric-engineering](https://github.com/arcticoder/lqg-ftl-metric-engineering): Primary integration for zero-exotic-energy FTL metric engineering with LQG polymer corrections.
+- [artificial-gravity-field-generator](https://github.com/arcticoder/artificial-gravity-field-generator): Provides artificial gravity for safety-critical warp field operations.
+- [unified-lqg](https://github.com/arcticoder/unified-lqg): Supplies LQG quantum geometry framework and spacetime manipulation capabilities.
+- [negative-energy-generator](https://github.com/arcticoder/negative-energy-generator): Integrated energy source for warp field generation with 242M× efficiency enhancement.
+
+All repositories are part of the [arcticoder](https://github.com/arcticoder) ecosystem and link back to the energy framework for unified documentation and integration.
+
 ## 🎯 Multi-Axis Warp Field Controller - LQG Drive Integration Implementation Plan
 
 ### **✅ IMPLEMENTATION STATUS: PRODUCTION READY**
