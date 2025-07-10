@@ -1,5 +1,9 @@
 # Warp Field Coils - LQG FTL Metric Engineering Support Systems
 
+## 🏥 Repository Migration Notice
+
+**Medical Tractor Array System Moved**: The `src/medical_tractor_array/` components have been migrated to the dedicated [medical-tractor-array](https://github.com/arcticoder/medical-tractor-array) repository as part of the Medical-Grade Graviton Safety System development. This specialized repository now handles all medical-grade gravitational field safety protocols with T_μν ≥ 0 positive energy constraints.
+
 ## Related Repositories
 
 - [energy](https://github.com/arcticoder/energy): Central meta-repo for all energy, quantum, and warp field research. This warp field system is a core component of the energy ecosystem.
@@ -817,7 +821,6 @@ warp-field-coils/
 │   │   └── multi_axis_controller.py # LQG Multi-Axis Controller with Enhanced Framework integration
 │   ├── subspace_transceiver/       # FTL communication systems
 │   ├── holodeck_forcefield_grid/   # Force-field simulation and control
-│   ├── medical_tractor_array/      # Medical-grade tractor beam systems
 │   └── tomographic_scanner/        # 3D field visualization and imaging
 ├── enhanced_inertial_damper_field.py  # LQG polymer-enhanced IDF with sinc(πμ) corrections
 ├── test_polymer_enhanced_idf.py    # Comprehensive testing for polymer mathematics

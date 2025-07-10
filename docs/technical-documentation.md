@@ -1,5 +1,9 @@
 # Warp Field Coils - Technical Documentation
 
+## 🏥 Repository Migration Notice
+
+**Medical Tractor Array System Moved**: The `src/medical_tractor_array/` components have been migrated to the dedicated [medical-tractor-array](https://github.com/arcticoder/medical-tractor-array) repository as part of the Medical-Grade Graviton Safety System development. This specialized repository now handles all medical-grade gravitational field safety protocols with T_μν ≥ 0 positive energy constraints.
+
 ## 🚀 SUBSPACE TRANSCEIVER IMPLEMENTATION (Step 8) - PRODUCTION READY
 
 ### **✅ IMPLEMENTATION COMPLETE - PRODUCTION DEPLOYED**
