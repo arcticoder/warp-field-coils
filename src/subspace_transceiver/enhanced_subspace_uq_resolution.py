@@ -367,9 +367,16 @@ def main():
     resolver = EnhancedSubspaceUQResolver()
     results = resolver.run_enhanced_uq_resolution()
     
-    # Save enhanced results
+    # Save enhanced results (convert numpy types to Python native types)
+    serializable_results = {}
+    for key, value in results.items():
+        if hasattr(value, 'item'):  # numpy scalar
+            serializable_results[key] = value.item()
+        else:
+            serializable_results[key] = value
+    
     with open('enhanced_subspace_uq_results.json', 'w') as f:
-        json.dump(results, f, indent=2)
+        json.dump(serializable_results, f, indent=2)
     
     print(f"\n📁 Enhanced results saved to: enhanced_subspace_uq_results.json")
     
