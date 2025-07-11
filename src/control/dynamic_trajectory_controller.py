@@ -89,6 +89,22 @@ except ImportError:
     def polymer_enhancement_factor(mu):
         return np.sinc(np.pi * mu) if mu != 0 else 1.0
 
+try:
+    # Dynamic Backreaction Factor implementation
+    energy_framework_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'energy', 'src')
+    sys.path.append(energy_framework_path)
+    from dynamic_backreaction_factor import (
+        DynamicBackreactionCalculator,
+        DynamicBackreactionConfig,
+        SpacetimeState,
+        create_dynamic_backreaction_calculator,
+        BETA_BASELINE
+    )
+    DYNAMIC_BACKREACTION_AVAILABLE = True
+except ImportError:
+    DYNAMIC_BACKREACTION_AVAILABLE = False
+    logging.warning("Dynamic Backreaction Factor not available - using hardcoded β = 1.9443254780147017")
+
 @dataclass
 class LQGTrajectoryParams:
     """Enhanced parameters for LQG Dynamic Trajectory Control with Bobrick-Martire geometry."""
@@ -100,8 +116,15 @@ class LQGTrajectoryParams:
     
     # LQG polymer parameters
     polymer_scale_mu: float = 0.7            # LQG polymer parameter μ
-    exact_backreaction_factor: float = EXACT_BACKREACTION_FACTOR  # β = 1.9443254780147017
+    exact_backreaction_factor: float = EXACT_BACKREACTION_FACTOR  # β = 1.9443254780147017 (fallback)
     enable_polymer_corrections: bool = True   # Enable sinc(πμ) polymer corrections
+    
+    # Dynamic Backreaction Factor parameters
+    enable_dynamic_backreaction: bool = True # Enable dynamic β(t) calculation
+    enable_field_modulation: bool = True    # Enable field strength modulation
+    enable_velocity_correction: bool = True # Enable relativistic velocity correction
+    enable_curvature_adjustment: bool = True # Enable spacetime curvature adjustment
+    max_velocity_factor: float = 0.99       # Maximum velocity fraction v/c for safety
     
     # Bobrick-Martire geometry parameters
     positive_energy_only: bool = True        # Enforce T_μν ≥ 0 throughout spacetime
@@ -137,6 +160,12 @@ class LQGTrajectoryState:
     # LQG polymer state
     polymer_enhancement: float = 1.0        # Current sinc(πμ) enhancement
     stress_energy_reduction: float = 0.0    # Achieved stress-energy reduction (%)
+    
+    # Dynamic backreaction state
+    current_beta_factor: float = EXACT_BACKREACTION_FACTOR  # Current β(t) value
+    field_strength: float = 0.0             # Current electromagnetic field strength
+    local_curvature: float = 0.0            # Local spacetime curvature (m⁻²)
+    beta_enhancement_ratio: float = 1.0     # β(t) / β₀ ratio
     
     # Energy and safety monitoring
     total_energy_consumed: float = 0.0      # Total energy consumption (J)
@@ -216,7 +245,31 @@ class LQGDynamicTrajectoryController:
             self.quantum_field_manipulator = None
             self.energy_momentum_controller = None
             self.field_validator = None
-            logging.warning("⚠️ Bobrick-Martire controller unavailable - using mock")
+            logging.warning("⚠️ Enhanced Simulation Framework unavailable - using mock")
+        
+        # Initialize Dynamic Backreaction Factor Calculator
+        if DYNAMIC_BACKREACTION_AVAILABLE and params.enable_dynamic_backreaction:
+            self.dynamic_backreaction_calculator = create_dynamic_backreaction_calculator(
+                enable_all_features=True,
+                polymer_scale_mu=params.polymer_scale_mu,
+                max_velocity_factor=params.max_velocity_factor
+            )
+            # Override specific features based on params
+            self.dynamic_backreaction_calculator.config.enable_field_modulation = params.enable_field_modulation
+            self.dynamic_backreaction_calculator.config.enable_velocity_correction = params.enable_velocity_correction
+            self.dynamic_backreaction_calculator.config.enable_curvature_adjustment = params.enable_curvature_adjustment
+            
+            logging.info("✓ Dynamic Backreaction Factor calculator active")
+            logging.info(f"  - Field modulation: {'ENABLED' if params.enable_field_modulation else 'DISABLED'}")
+            logging.info(f"  - Velocity correction: {'ENABLED' if params.enable_velocity_correction else 'DISABLED'}")
+            logging.info(f"  - Curvature adjustment: {'ENABLED' if params.enable_curvature_adjustment else 'DISABLED'}")
+            logging.info(f"  - β(t) replaces hardcoded β = {params.exact_backreaction_factor}")
+        else:
+            self.dynamic_backreaction_calculator = None
+            if params.enable_dynamic_backreaction:
+                logging.warning("⚠️ Dynamic Backreaction Factor unavailable - using hardcoded β")
+            else:
+                logging.info("Dynamic Backreaction Factor disabled - using hardcoded β")
         
         # Control system parameters
         self.dt = 1.0 / params.control_frequency
@@ -234,7 +287,13 @@ class LQGDynamicTrajectoryController:
             'positive_energy_density': [],
             'thrust_force': [],
             'control_error': [],
-            'safety_status': []
+            'safety_status': [],
+            # Dynamic backreaction tracking
+            'current_beta_factor': [],
+            'beta_enhancement_ratio': [],
+            'field_strength': [],
+            'local_curvature': [],
+            'dynamic_beta_computation_time': []
         }
         
         # Initialize current state
@@ -275,6 +334,51 @@ class LQGDynamicTrajectoryController:
         self._polymer_cache[cache_key] = enhancement
         return enhancement
     
+    def compute_dynamic_backreaction_factor(self, 
+                                          field_strength: float = 0.0,
+                                          local_curvature: float = 0.0) -> Tuple[float, Dict]:
+        """
+        Compute dynamic backreaction factor β(t) = f(field_strength, velocity, local_curvature).
+        
+        This replaces the hardcoded β = 1.9443254780147017 with real-time physics-based calculation.
+        
+        Args:
+            field_strength: Current electromagnetic field strength |F|
+            local_curvature: Local spacetime curvature (m⁻²)
+            
+        Returns:
+            Tuple of (beta_factor, calculation_diagnostics)
+        """
+        if self.dynamic_backreaction_calculator is None:
+            # Fallback to hardcoded value
+            return self.params.exact_backreaction_factor, {
+                'dynamic_calculation': False,
+                'fallback_used': True,
+                'computation_time_ms': 0.0
+            }
+        
+        # Create spacetime state from current trajectory state
+        spacetime_state = SpacetimeState(
+            field_strength=field_strength,
+            velocity=self.current_state.velocity,
+            acceleration=self.current_state.acceleration,
+            local_curvature=local_curvature,
+            polymer_parameter=self.params.polymer_scale_mu,
+            time=self.current_state.time,
+            time_step=self.params.time_step
+        )
+        
+        # Calculate dynamic β(t)
+        beta_factor, diagnostics = self.dynamic_backreaction_calculator.calculate_dynamic_beta(spacetime_state)
+        
+        # Update current state with new β factor
+        self.current_state.current_beta_factor = beta_factor
+        self.current_state.field_strength = field_strength
+        self.current_state.local_curvature = local_curvature
+        self.current_state.beta_enhancement_ratio = beta_factor / self.params.exact_backreaction_factor
+        
+        return beta_factor, diagnostics
+    
     def compute_bobrick_martire_thrust(self, 
                                      amplitude: float,
                                      bubble_radius: float = 2.0,
@@ -314,8 +418,16 @@ class LQGDynamicTrajectoryController:
                     # Extract thrust from positive-energy stress-energy tensor
                     thrust_force = self._extract_positive_thrust(geometry_result)
                     
-                    # Apply exact backreaction reduction
-                    thrust_force /= self.params.exact_backreaction_factor
+                    # Estimate field strength and curvature from geometry result
+                    field_strength = self._estimate_field_strength(geometry_result, amplitude)
+                    local_curvature = self._estimate_local_curvature(geometry_result, bubble_radius)
+                    
+                    # Apply dynamic backreaction factor β(t) - REPLACES HARDCODED β = 1.9443254780147017
+                    beta_factor, beta_diagnostics = self.compute_dynamic_backreaction_factor(
+                        field_strength=field_strength,
+                        local_curvature=local_curvature
+                    )
+                    thrust_force /= beta_factor
                     
                     # Apply sub-classical enhancement
                     thrust_force *= self.params.sub_classical_enhancement
@@ -325,7 +437,13 @@ class LQGDynamicTrajectoryController:
                         'energy_efficiency': geometry_result.energy_efficiency,
                         'positive_energy_density': self._compute_positive_energy_density(geometry_result),
                         'exotic_energy_density': 0.0,  # Should be zero for Bobrick-Martire
-                        'causality_preserved': geometry_result.causality_preserved
+                        'causality_preserved': geometry_result.causality_preserved,
+                        # Dynamic backreaction metrics
+                        'beta_factor_used': beta_factor,
+                        'beta_enhancement_ratio': beta_factor / self.params.exact_backreaction_factor,
+                        'dynamic_beta_diagnostics': beta_diagnostics,
+                        'field_strength_estimated': field_strength,
+                        'local_curvature_estimated': local_curvature
                     }
                     
                 else:
@@ -382,6 +500,54 @@ class LQGDynamicTrajectoryController:
                 return max(0.0, float(T_00))
         return 0.0
     
+    def _estimate_field_strength(self, geometry_result, amplitude: float) -> float:
+        """
+        Estimate electromagnetic field strength from Bobrick-Martire geometry result.
+        
+        Args:
+            geometry_result: Bobrick-Martire geometry optimization result
+            amplitude: Shape amplitude parameter
+            
+        Returns:
+            Estimated field strength |F| for dynamic backreaction calculation
+        """
+        if hasattr(geometry_result, 'electromagnetic_field'):
+            # Use actual field if available
+            field_components = geometry_result.electromagnetic_field
+            if isinstance(field_components, np.ndarray):
+                return np.linalg.norm(field_components)
+            else:
+                return abs(float(field_components))
+        else:
+            # Estimate from amplitude and optimization factor
+            optimization_factor = getattr(geometry_result, 'optimization_factor', 1.0)
+            estimated_field = amplitude * optimization_factor * 1e-6  # Scale to realistic field strength
+            return max(0.0, estimated_field)
+    
+    def _estimate_local_curvature(self, geometry_result, bubble_radius: float) -> float:
+        """
+        Estimate local spacetime curvature from Bobrick-Martire geometry result.
+        
+        Args:
+            geometry_result: Bobrick-Martire geometry optimization result
+            bubble_radius: Warp bubble radius
+            
+        Returns:
+            Estimated local curvature (m⁻²) for dynamic backreaction calculation
+        """
+        if hasattr(geometry_result, 'ricci_scalar'):
+            # Use actual curvature if available
+            return abs(float(geometry_result.ricci_scalar))
+        elif hasattr(geometry_result, 'optimization_factor'):
+            # Estimate from optimization factor and bubble size
+            optimization_factor = geometry_result.optimization_factor
+            # Curvature scales roughly as 1/R² for bubble radius R
+            estimated_curvature = optimization_factor * (1.0 / bubble_radius**2) * 1e12
+            return max(0.0, estimated_curvature)
+        else:
+            # Simple estimate from bubble radius
+            return 1.0 / (bubble_radius**2) * 1e10  # Basic geometric estimate
+    
     def _compute_fallback_positive_thrust(self, amplitude: float, bubble_radius: float, 
                                         target_acceleration: float) -> Tuple[float, Dict]:
         """Fallback positive-energy thrust computation when full framework unavailable."""
@@ -399,12 +565,28 @@ class LQGDynamicTrajectoryController:
         if self.params.van_den_broeck_optimization:
             positive_thrust /= 1e5  # 10⁵× energy reduction approximation
         
+        # Apply dynamic backreaction factor for fallback case
+        field_strength_estimate = normalized_amplitude * 1e-6  # Simple field estimate
+        curvature_estimate = 1.0 / (bubble_radius**2) * 1e10  # Simple curvature estimate
+        
+        beta_factor, beta_diagnostics = self.compute_dynamic_backreaction_factor(
+            field_strength=field_strength_estimate,
+            local_curvature=curvature_estimate
+        )
+        positive_thrust /= beta_factor
+        
         metrics = {
             'optimization_factor': geometric_efficiency,
             'energy_efficiency': 1e5 if self.params.van_den_broeck_optimization else 1.0,
             'positive_energy_density': normalized_amplitude * 1e12,  # Estimate in J/m³
             'exotic_energy_density': 0.0,  # Zero by design
-            'causality_preserved': True
+            'causality_preserved': True,
+            # Dynamic backreaction metrics for fallback
+            'beta_factor_used': beta_factor,
+            'beta_enhancement_ratio': beta_factor / self.params.exact_backreaction_factor,
+            'dynamic_beta_diagnostics': beta_diagnostics,
+            'field_strength_estimated': field_strength_estimate,
+            'local_curvature_estimated': curvature_estimate
         }
         
         return positive_thrust, metrics
@@ -685,6 +867,13 @@ class LQGDynamicTrajectoryController:
         geometry_factors = np.zeros(n_points)
         safety_statuses = []
         
+        # Dynamic backreaction tracking arrays
+        beta_factors = np.zeros(n_points)
+        beta_enhancement_ratios = np.zeros(n_points)
+        field_strengths = np.zeros(n_points)
+        local_curvatures = np.zeros(n_points)
+        beta_computation_times = np.zeros(n_points)
+        
         # Initialize simulation state
         current_position = initial_conditions.get('position', 0.0) if initial_conditions else 0.0
         current_velocity = initial_conditions.get('velocity', 0.0) if initial_conditions else 0.0
@@ -721,8 +910,21 @@ class LQGDynamicTrajectoryController:
                 )
                 enhancements[i] = enhancement
                 
-                # Stress-energy reduction from exact backreaction factor
-                stress_reduction = (1.0 - 1.0/self.params.exact_backreaction_factor) * 100
+                # Extract dynamic backreaction metrics from optimization
+                field_strength_current = metrics.get('field_strength_estimated', 0.0)
+                curvature_current = metrics.get('local_curvature_estimated', 0.0)
+                beta_factor_current = metrics.get('beta_factor_used', self.params.exact_backreaction_factor)
+                beta_diagnostics = metrics.get('dynamic_beta_diagnostics', {})
+                
+                # Store dynamic backreaction data
+                beta_factors[i] = beta_factor_current
+                beta_enhancement_ratios[i] = beta_factor_current / self.params.exact_backreaction_factor
+                field_strengths[i] = field_strength_current
+                local_curvatures[i] = curvature_current
+                beta_computation_times[i] = beta_diagnostics.get('computation_time_ms', 0.0)
+                
+                # Stress-energy reduction from dynamic backreaction factor
+                stress_reduction = (1.0 - 1.0/beta_factor_current) * 100
                 stress_reductions[i] = stress_reduction
                 
                 # Energy calculation with sub-classical enhancement
@@ -804,7 +1006,19 @@ class LQGDynamicTrajectoryController:
             'simulation_completion_rate': 100.0,
             'ftl_operation_time': sum(1 for v in velocities if v > 299792458.0) * time_step,
             'avg_geometry_optimization': np.mean(geometry_factors),
-            'avg_polymer_enhancement': np.mean(enhancements)
+            'avg_polymer_enhancement': np.mean(enhancements),
+            # Dynamic backreaction performance metrics
+            'avg_beta_factor': np.mean(beta_factors),
+            'min_beta_factor': np.min(beta_factors),
+            'max_beta_factor': np.max(beta_factors),
+            'avg_beta_enhancement_ratio': np.mean(beta_enhancement_ratios),
+            'avg_field_strength': np.mean(field_strengths),
+            'max_field_strength': np.max(field_strengths),
+            'avg_local_curvature': np.mean(local_curvatures),
+            'max_local_curvature': np.max(local_curvatures),
+            'avg_beta_computation_time_ms': np.mean(beta_computation_times),
+            'total_beta_computation_time_ms': np.sum(beta_computation_times),
+            'dynamic_backreaction_enabled': self.dynamic_backreaction_calculator is not None
         }
         
         # Log completion summary
@@ -814,6 +1028,14 @@ class LQGDynamicTrajectoryController:
         logging.info(f"   Stress-energy reduction: {avg_stress_reduction:.1f}%")
         logging.info(f"   Zero exotic energy: {performance_metrics['zero_exotic_energy_achieved']}")
         logging.info(f"   Success rate: {success_rate:.1f}%")
+        # Dynamic backreaction summary
+        if self.dynamic_backreaction_calculator is not None:
+            avg_beta = performance_metrics['avg_beta_factor']
+            avg_enhancement = performance_metrics['avg_beta_enhancement_ratio']
+            logging.info(f"   Dynamic β(t): {avg_beta:.6f} (avg), enhancement ratio: {avg_enhancement:.3f}×")
+            logging.info(f"   β computation: {performance_metrics['avg_beta_computation_time_ms']:.3f} ms (avg)")
+        else:
+            logging.info(f"   Static β = {self.params.exact_backreaction_factor:.6f} (hardcoded)")
         
         return {
             'time': times,
@@ -827,6 +1049,12 @@ class LQGDynamicTrajectoryController:
             'total_energy_consumed': total_energies,
             'geometry_optimization_factor': geometry_factors,
             'safety_status': safety_statuses,
+            # Dynamic backreaction data
+            'current_beta_factor': beta_factors,
+            'beta_enhancement_ratio': beta_enhancement_ratios,
+            'field_strength': field_strengths,
+            'local_curvature': local_curvatures,
+            'dynamic_beta_computation_time': beta_computation_times,
             'lqg_performance_metrics': performance_metrics
         }
     
@@ -1161,7 +1389,7 @@ if not hasattr(sys.modules.get('__main__', {}), 'MetricTensorController'):
 
 # Factory Functions for Easy Integration
 
-def create_trajectory_controller(config_path: str = None) -> TrajectoryController:
+def create_trajectory_controller(config_path: str = None) -> LQGDynamicTrajectoryController:
     """
     Factory function to create a trajectory controller with default settings.
     
@@ -1169,7 +1397,7 @@ def create_trajectory_controller(config_path: str = None) -> TrajectoryControlle
         config_path: Optional path to configuration file
         
     Returns:
-        Configured TrajectoryController instance
+        Configured LQGDynamicTrajectoryController instance
     """
     if config_path and os.path.exists(config_path):
         with open(config_path, 'r') as f:
@@ -1191,7 +1419,7 @@ def create_trajectory_controller(config_path: str = None) -> TrajectoryControlle
             }
         }
     
-    return TrajectoryController(config)
+    return LQGDynamicTrajectoryController(config)
 
 
 def create_test_trajectory() -> dict:
