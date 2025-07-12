@@ -135,3 +135,37 @@ logs/
 *.log
 temp/
 tmp/
+
+# Warp field specific
+field_generation_logs/
+metric_controller_cache/
+spacetime_manipulation_logs/
+positive_energy_validation/
+warp_field_outputs/
+coil_configuration_cache/
+
+# FTL Research specific
+ftl_simulations/
+hull_design_integration/
+navigation_logs/
+velocity_validation_outputs/
+48c_test_results/
+
+# LQG specific
+polymer_field_cache/
+quantum_geometry_cache/
+backreaction_logs/
+constraint_validation/
+
+# Scientific computing specific
+*.h5
+*.hdf5
+*.npy
+*.npz
+*.pickle
+*.pkl
+
+# Progress tracking
+update-progress.txt
+implementation-status.json
+validation-tracking.log

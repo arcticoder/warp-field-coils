@@ -44,6 +44,7 @@ The Enhanced Field Coils ↔ LQG Metric Controller integration represents a **re
 ## Related Repositories
 
 - [energy](https://github.com/arcticoder/energy): Central meta-repo for all energy, quantum, and warp field research. This warp field system is a core component of the energy ecosystem.
+- [enhanced-simulation-hardware-abstraction-framework](https://github.com/arcticoder/enhanced-simulation-hardware-abstraction-framework): Revolutionary FTL-capable hull design framework with naval architecture integration achieving 48c superluminal operations, providing structural foundation for warp field systems.
 - [lqg-ftl-metric-engineering](https://github.com/arcticoder/lqg-ftl-metric-engineering): Primary integration for zero-exotic-energy FTL metric engineering with LQG polymer corrections.
 - [artificial-gravity-field-generator](https://github.com/arcticoder/artificial-gravity-field-generator): Provides artificial gravity for safety-critical warp field operations.
 - [unified-lqg](https://github.com/arcticoder/unified-lqg): Supplies LQG quantum geometry framework and spacetime manipulation capabilities.
