@@ -169,3 +169,4 @@ constraint_validation/
 update-progress.txt
 implementation-status.json
 validation-tracking.log
+.github/instructions/copilot-instructions.md
