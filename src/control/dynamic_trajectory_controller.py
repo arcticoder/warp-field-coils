@@ -89,6 +89,25 @@ except ImportError:
     def polymer_enhancement_factor(mu):
         return np.sinc(np.pi * mu) if mu != 0 else 1.0
 
+@dataclass
+class TrajectoryParams:
+    """Parameters for dynamic trajectory control (compatibility alias)"""
+    effective_mass: float = 1000.0  # kg
+    max_acceleration: float = 9.81  # m/s²
+    polymer_parameter_mu: float = 0.5  # For sinc(πμ) corrections
+    enable_optimizations: bool = True
+    positive_energy_only: bool = True
+    enable_polymer_corrections: bool = True
+    causality_preservation: bool = True
+
+@dataclass  
+class TrajectoryState:
+    """State for trajectory tracking"""
+    position: np.ndarray = None
+    velocity: np.ndarray = None
+    acceleration: np.ndarray = None
+    time: float = 0.0
+
 try:
     # Dynamic Backreaction Factor implementation
     energy_framework_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'energy', 'src')
