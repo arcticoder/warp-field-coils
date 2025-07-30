@@ -1,5 +1,7 @@
 """
-Control systems module for closed-loop field control and dynamic trajectory control
+Control package for Warp Field Coils.
+
+Provides the dynamic trajectory controller and related metric-building modules.
 """
 
 # Import order matters to avoid circular imports

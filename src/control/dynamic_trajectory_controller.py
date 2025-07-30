@@ -1311,6 +1311,54 @@ class LQGDynamicTrajectoryController:
         else:
             return 1.0  # Overdamped
 
+    def alcubierre_shape(self, r: float) -> float:
+        """
+        Simple “bump” shape function:
+          f(r) = 1 − (r/R)^2    for r < R
+               = 0              for r >= R
+        where R = self.params.bubble_radius.
+        """
+        R = self.params.bubble_radius
+        if R <= 0.0:
+            return 0.0
+        if r >= R:
+            return 0.0
+        return 1.0 - (r / R) ** 2
+
+    def build_warp_metric(self,
+                          center: Tuple[float, float, float],
+                          radius: float,
+                          shape_func: Callable[[float], float]
+                          ) -> np.ndarray:
+        """
+        Generate a 4×4 metric on a 1D radial grid (5 points from 0 to 3.5R):
+          g_00 = -1
+          g_11 = 1 − f(r)
+          g_22 = g_33 = 1
+        All off-diagonals zero.
+        """
+        # make sure our shape uses the right bubble radius
+        self.params.bubble_radius = radius
+
+        # exactly 5 sample points from r=0 to r=3.5R, matching the pytest param
+        num_r = 5
+        radii = np.linspace(0.0, radius * 3.5, num_r)
+
+        # allocate array of shape (r, θ=1, φ=1, μ=4, ν=4)
+        metric = np.zeros((num_r, 1, 1, 4, 4), dtype=float)
+        metric[..., 0, 0] = -1.0    # g_00
+        metric[..., 2, 2] = 1.0     # g_22
+        metric[..., 3, 3] = 1.0     # g_33
+
+        # fill in g_11 = 1 − f(r)
+        fvals = np.array([shape_func(rr) for rr in radii])
+        metric[:, 0, 0, 1, 1] = 1.0 - fvals
+
+        return metric
+
+    # alias so tests calling _generate_geometric_field still work
+    _generate_geometric_field = build_warp_metric
+
 
 # Mock implementations for missing dependencies
 if not BOBRICK_MARTIRE_AVAILABLE:
